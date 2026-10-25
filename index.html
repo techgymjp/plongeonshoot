@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ムササビシュート</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="hud-box">SCORE <b id="score">0</b></div>
+    <div class="hud-box" id="shotInfo">1 / 5 本目</div>
+    <div class="hud-box" id="steps"><span>歩数</span><i></i><i></i><i></i></div>
+    <button id="muteBtn" aria-label="サウンド切替">🔊</button>
+  </div>
+
+  <div id="msg"><div class="big"></div><div class="sub"></div></div>
+
+  <div id="controls">
+    <div id="dirPad">
+      <button data-dir="-1" aria-label="左">◀</button>
+      <button data-dir="0" aria-label="まっすぐ">●</button>
+      <button data-dir="1" aria-label="右">▶</button>
+    </div>
+    <div id="actions">
+      <div id="shotBtns">
+        <button data-shot="normal">ノーマル</button>
+        <button data-shot="loop">ループ</button>
+        <button data-shot="spin">スピン</button>
+        <button data-shot="bound">バウンド</button>
+      </div>
+      <div id="jumpBtns">
+        <button id="musaBtn">ムササビ</button>
+        <button id="jumpBtn">ジャンプ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="title" class="overlay show">
+    <div class="panel">
+      <h1>ムササビシュート</h1>
+      <p class="lead">パスを受けた瞬間からスタート！<br>3歩以内で跳んで、空中でシュートを決めよう。</p>
+      <ul class="rules">
+        <li><b>◀ ● ▶</b> … 走る方向・シュートの方向</li>
+        <li><b>ジャンプ</b> … いつでも跳べる</li>
+        <li><b>ムササビ</b> … 3歩ダッシュした時だけ出現。滞空時間がとても長い</li>
+        <li><b>ノーマル / ループ / スピン / バウンド</b> … 着地するまでいつでも打てる</li>
+        <li>ジャンプせずに打つと <b>ステップシュート</b>、跳んですぐ打つと <b>クイックシュート</b></li>
+        <li class="ng">4歩目を踏む・6mラインを踏む・シュート前に着地 → 失敗</li>
+      </ul>
+      <p class="hint">ヒント：キーパーの動きを見て打ち分けよう。<br>前に出た・しゃがんだ → ループ ／ 大の字 → バウンド・スピン ／ 倒れた → 逆サイド</p>
+      <p class="keys">キーボード：← ↓ → 方向 ／ Space ジャンプ ／ Shift ムササビ ／ Z ノーマル X ループ C スピン V バウンド</p>
+      <button id="startBtn" class="big-btn">スタート</button>
+    </div>
+  </div>
+
+  <div id="result" class="overlay">
+    <div class="panel">
+      <h2>結果</h2>
+      <div id="rank"></div>
+      <div id="finalScore"></div>
+      <ol id="history"></ol>
+      <button id="retryBtn" class="big-btn">もう一度</button>
+    </div>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
