@@ -131,3 +131,43 @@ html, body {
   .hud-box b { font-size: 15px; }
 }
 @media (pointer: coarse) { .keys { display: none; } }
+
+/* ---------- タイトル(言語切り替え) ---------- */
+#langSel { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+#langSel .langBtn {
+  font: inherit; font-size: 13px; padding: 5px 14px; border-radius: 16px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .5); background: rgba(0, 0, 0, .45); color: #fff;
+}
+#langSel .langBtn.on { background: rgba(255, 225, 77, .9); border-color: #ffe14d; color: #222; font-weight: bold; }
+#title .big-btn { display: block; margin: 12px auto 0; }
+
+/* ---------- 遊び方(別画面) ---------- */
+.panel.help { max-width: 720px; text-align: left; }
+.panel.help h2 { text-align: center; }
+.help-body h3 { margin: 12px 0 4px; font-size: 16px; color: #ffd84a; }
+.help-body p, .help-body li { font-size: 14px; line-height: 1.6; margin: 2px 0; }
+.help-body ol, .help-body ul { margin: 0; padding-left: 1.4em; }
+.help-body .ng { color: #ff8a8a; }
+.panel.help .big-btn { display: block; margin: 14px auto 0; }
+@media (pointer: coarse) { .keys-only { display: none; } }
+
+/* ---------- 結果のシェア ---------- */
+#share { display: flex; flex-direction: column; gap: 8px; max-width: 420px; margin: 8px auto 10px; }
+#share .row { display: flex; gap: 8px; }
+#share .sbtn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 0; border-radius: 10px; padding: 7px 10px; font: inherit; font-weight: 800; font-size: 14px;
+  text-align: center; text-decoration: none; cursor: pointer; background: #dfe7f7; color: #1b2440;
+}
+#share .sbtn.main {
+  padding: 9px 12px; font-size: 17px; font-weight: 900;
+  background: linear-gradient(#7fe3ff, #2f9bff); color: #031a33; box-shadow: 0 4px 0 #11589b;
+}
+#share .sbtn.main small { display: block; font-size: .65em; font-weight: 700; opacity: .75; }
+#share .sbtn:active { transform: translateY(2px); }
+@media (max-height: 460px) {
+  .help-body p, .help-body li { font-size: 12px; line-height: 1.45; }
+  .help-body h3 { font-size: 14px; margin: 8px 0 2px; }
+  #share .sbtn { padding: 5px 8px; font-size: 12px; }
+  #share .sbtn.main { font-size: 14px; }
+}

@@ -328,7 +328,7 @@ window.Scene3D = (() => {
   }
 
   function updateScreen(st) {
-    const key = `${st.shotNo}|${st.score}|${st.goals}|${st.phase}`;
+    const key = `${st.shotNo}|${st.score}|${st.goals}|${st.phase}|${I18N.lang}`;
     if (key === screens.key) return;
     screens.key = key;
     const g = screens.canvas.getContext('2d');
@@ -337,7 +337,7 @@ window.Scene3D = (() => {
     g.fillStyle = '#ffd54f'; g.font = 'bold 40px sans-serif';
     g.fillText('MUSASABI SHOOT!', 256, 52);
     g.fillStyle = '#ffffff'; g.font = 'bold 34px sans-serif';
-    g.fillText(`${Math.max(1, st.shotNo)} / ${st.total} 本目`, 256, 108, 480);
+    g.fillText(I18N.t('screen.shot', { n: Math.max(1, st.shotNo), t: st.total }), 256, 108, 480);
     g.fillStyle = '#7fe0ff'; g.font = 'bold 30px sans-serif';
     g.fillText(`GOAL ${st.goals}   SCORE ${st.score}`, 256, 160, 480);
     screens.tex.needsUpdate = true;

@@ -9,8 +9,8 @@
 <body>
 <div id="rotate">
   <div class="phone"></div>
-  <p>スマホを横向きにしてください</p>
-  <small>ムササビシュートは横画面で遊ぶゲームです</small>
+  <p data-i18n="rotate.msg">スマホを横向きにしてください</p>
+  <small data-i18n="rotate.sub">ムササビシュートは横画面で遊ぶゲームです</small>
 </div>
 <div id="wrap">
 <div id="stage">
@@ -19,60 +19,74 @@
 
   <div id="hud">
     <div class="hud-box">SCORE <b id="score">0</b></div>
-    <div class="hud-box" id="shotInfo">1 / 20 本目</div>
-    <div class="hud-box" id="steps"><span>歩数</span><i></i><i></i><i></i></div>
+    <div class="hud-box" id="shotInfo">1 / 20</div>
+    <div class="hud-box" id="steps"><span data-i18n="hud.steps">歩数</span><i></i><i></i><i></i></div>
     <div class="hud-box" id="bestBox">BEST <b id="best">0</b></div>
     <div class="hud-right">
       <button id="navBtn" type="button">ナビ ON</button>
-      <button id="muteBtn" type="button" aria-label="サウンド切替">🔊</button>
+      <button id="muteBtn" type="button" aria-label="sound">🔊</button>
     </div>
   </div>
 
   <div id="msg"><div class="big"></div><div class="sub"></div></div>
 
+  <!-- タイトル -->
   <div id="title" class="overlay show">
     <div class="panel">
-      <h1>ムササビシュート</h1>
-      <p class="lead">ホイッスル「ピッ！」でプレー開始。画面右のサイド（右コーナー・定位置・サイドライン沿い）で走りながらパスを受けよう！<br>左（中央）へ切れ込み、3歩以内にコート中央へ跳び込んでシュートを決めよう。</p>
-      <ul class="rules">
-        <li>助走のコースは自動。左端の <b>ダッシュ</b>（長押し）で歩幅が大きくなる。近くでダッシュのまま3歩進むと6mラインに入ってしまう</li>
-        <li>左端の <b>ジャンプ</b> … いつでも跳べる。パスを受けてから <b>ダッシュで2歩</b> 踏むと自動で <b>ムササビ</b> に変わり、跳ぶまでそのまま</li>
-        <li>パスを受けるまでは操作なし（走る速さは開始位置で決まる）</li>
-        <li>跳んだら左端が <b>方向キー</b>（方角リング）に変わる … シュートのコース（左右・高低）を決める</li>
-        <li>右端のシュート（ひし形）… まん中 <b>ノーマル</b> ／ 上 <b>ループ</b> ／ 左 <b>左スピン</b> ／ 右 <b>右スピン</b> ／ 下 <b>バウンド</b>（着地するまでいつでも。地上で押すとステップシュート）</li>
-        <li>跳ばずに打つと <b>ステップ</b>、跳んですぐ <b>クイック</b>、頂点で <b>ジャンプ</b>、落ちながら <b>倒れ込み</b></li>
-        <li>ジャンプは踏ん張ってから跳ぶ。シュートは腕を引いてから投げるので、ボールが手を離れるまで少しかかる</li>
-        <li class="ng">4歩目を踏む・6mラインを踏む・投げ終わる前に着地 → 失敗</li>
-      </ul>
-      <p class="hint">ムササビ（プロンジョンシュート）は、ゴールではなくコート中央へ跳び込んで角度を広げる技。<br>まず高く跳んでキーパーを見て、後半に体を倒す。倒すほど角度は広がるが、高いコースは打ちにくい。<br>前に出た・しゃがんだ・両手を広げた → ループ ／ 大の字 → バウンド ／ 倒れた → 逆サイドへノーマル<br>スピンはダッシュして歩数を使うほどキレる。ループはキーパーが下がってジャンプするので、隅を狙おう</p>
-      <p class="keys">キーボード：矢印キー / WASD 方向（跳んでから） ／ Shift ダッシュ ／ Space ジャンプ・ムササビ ／ U ノーマル　I ループ　J 左スピン　L 右スピン　K バウンド ／ P・Esc 一時停止 ／ M 音 ／ N ナビ</p>
-      <p class="best">ベスト記録：<b id="titleBest">0</b> 点</p>
-      <button id="startBtn" class="big-btn">スタート</button>
+      <h1 data-i18n="title">ムササビシュート</h1>
+      <p class="lead" data-i18n-html="title.lead"></p>
+      <button id="startBtn" class="big-btn" data-i18n="btn.start">スタート</button>
+      <button id="helpBtn" class="sub-btn" data-i18n="btn.help">遊び方</button>
+      <p class="best" id="titleBest"></p>
+      <div id="langSel">
+        <button class="langBtn" type="button" data-lang="ja">日本語</button>
+        <button class="langBtn" type="button" data-lang="en">English</button>
+      </div>
     </div>
   </div>
 
+  <!-- 遊び方(別画面) -->
+  <div id="help" class="overlay">
+    <div class="panel help">
+      <h2 data-i18n="help.title">遊び方</h2>
+      <div class="help-body" data-i18n-html="help.body"></div>
+      <button id="helpBack" class="big-btn" data-i18n="btn.back">もどる</button>
+    </div>
+  </div>
+
+  <!-- 結果 -->
   <div id="result" class="overlay">
     <div class="panel">
-      <h2>結果</h2>
+      <h2 data-i18n="result.title">結果</h2>
       <div id="rank"></div>
       <div id="finalScore"></div>
       <div id="newRecord"></div>
+      <div id="share">
+        <button id="shareBtn" class="sbtn main" type="button"><span data-i18n="share.btn">📤 結果をシェア</span><small id="shareMsg"></small></button>
+        <div class="row">
+          <a id="shareX" class="sbtn" target="_blank" rel="noopener" data-i18n="share.post">𝕏 ポスト</a>
+          <a id="shareLine" class="sbtn" target="_blank" rel="noopener">LINE</a>
+          <button id="shareCopy" class="sbtn" type="button" data-i18n="share.copy">コピー</button>
+        </div>
+      </div>
       <ol id="history"></ol>
-      <button id="retryBtn" class="big-btn">もう一度</button>
-      <button id="titleBtn" class="sub-btn">タイトルへ</button>
+      <button id="retryBtn" class="big-btn" data-i18n="btn.retry">もう一度</button>
+      <button id="titleBtn" class="sub-btn" data-i18n="btn.title">タイトルへ</button>
     </div>
   </div>
 
+  <!-- 一時停止 -->
   <div id="pause" class="overlay">
     <div class="panel small">
-      <h2>PAUSE</h2>
-      <button id="resumeBtn" class="big-btn">再開</button>
-      <button id="pauseTitleBtn" class="sub-btn">タイトルへ</button>
+      <h2 data-i18n="pause.title">PAUSE</h2>
+      <button id="resumeBtn" class="big-btn" data-i18n="btn.resume">再開</button>
+      <button id="pauseTitleBtn" class="sub-btn" data-i18n="btn.title">タイトルへ</button>
     </div>
   </div>
 </div>
 </div>
 <script src="vendor/three.min.js"></script>
+<script src="i18n.js"></script>
 <script src="scene3d.js"></script>
 <script src="game.js"></script>
 </body>

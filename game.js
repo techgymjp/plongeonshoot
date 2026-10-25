@@ -13,6 +13,8 @@
   const canvas = $('#game');
   const ctx = canvas.getContext('2d');
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
+  const t = I18N.t;
+  const SHARE_URL = 'https://techgym.jp/column/claude-code-game-plongeonshoot/';
 
   // ================= 定数 =================
   const GOAL_HW = 1.5;          // ゴール半幅 (m)
@@ -37,50 +39,46 @@
   //   approach: パスを受けるまで走る速さ(初期条件。プレイヤーは操作しない)
   //   mate: パスを出す味方の位置
   const START_SPOTS = [
-    { name: '右コーナーから', x: [8.6, 9.5], z: [1.4, 2.8], approach: 1.8, path: [[7.8, 5.6], [1.0, 5.7]],
-      mate: { x: [3.6, 5.4], z: [9.8, 11.2] }, hint: 'ゴールライン際から上がって受ける。角度がないので早めに跳ぼう' },
-    { name: 'サイドの定位置から', x: [9.0, 9.7], z: [5.0, 7.0], approach: 2.0, path: [[1.0, 6.2]],
-      mate: { x: [3.6, 5.6], z: [10.2, 11.6] }, hint: '中央へ切れ込んで受ける' },
-    { name: 'サイドライン沿いに走り込んで', x: [9.0, 9.6], z: [9.0, 10.0], approach: 3.0, path: [[8.4, 7.4], [1.0, 5.7]],
-      mate: { x: [1.0, 3.0], z: [12.5, 14.0] }, hint: 'サイドラインに沿って走り、曲線を描いてセンターへ寄る' },
+    { key: 'spot.corner', x: [8.6, 9.5], z: [1.4, 2.8], approach: 1.8, path: [[7.8, 5.6], [1.0, 5.7]],
+      mate: { x: [3.6, 5.4], z: [9.8, 11.2] } },
+    { key: 'spot.wing', x: [9.0, 9.7], z: [5.0, 7.0], approach: 2.0, path: [[1.0, 6.2]],
+      mate: { x: [3.6, 5.6], z: [10.2, 11.6] } },
+    { key: 'spot.sideline', x: [9.0, 9.6], z: [9.0, 10.0], approach: 3.0, path: [[8.4, 7.4], [1.0, 5.7]],
+      mate: { x: [1.0, 3.0], z: [12.5, 14.0] } },
   ];
 
   const SHOT_TYPES = {
-    normal: { name: 'ノーマル', pts: 100 },
-    loop: { name: 'ループ', pts: 150 },
-    spinL: { name: '左スピン', pts: 180 },
-    spinR: { name: '右スピン', pts: 180 },
-    bound: { name: 'バウンド', pts: 130 },
+    normal: { pts: 100 },
+    loop: { pts: 150 },
+    spinL: { pts: 180 },
+    spinR: { pts: 180 },
+    bound: { pts: 130 },
   };
   // タイミングによるシュートの種類
   const TIMINGS = {
-    step: { name: 'ステップ', mult: 1.0 },
-    quick: { name: 'クイック', mult: 1.3 },
-    jump: { name: 'ジャンプ', mult: 1.2 },
-    fall: { name: '倒れ込み', mult: 1.1 },
-    musasabi: { name: 'ムササビ', mult: 2.0 },
+    step: { mult: 1.0 },
+    quick: { mult: 1.3 },
+    jump: { mult: 1.2 },
+    fall: { mult: 1.1 },
+    musasabi: { mult: 2.0 },
   };
   // キーパーのタイプ(立つ位置・動き方・決め打ちのくせ)
   const KEEPER_TYPES = [
-    { name: '定位置でじっくり型', z: 0.55, move: 'track', bias: 0.1, react: 0.2, speed: 3.0,
+    { id: 'track', z: 0.55, move: 'track', bias: 0.1, react: 0.2, speed: 3.0,
       commit: { star: 1, low: 1, diveL: 0.6, diveR: 0.6, out: 0.4, spread: 0.6, wait: 1.2 } },
-    { name: '飛び出し型', z: 0.9, move: 'rush', bias: 0.2, react: 0.18, speed: 3.2,
+    { id: 'rush', z: 0.9, move: 'rush', bias: 0.2, react: 0.18, speed: 3.2,
       commit: { star: 1.0, low: 0.4, diveL: 0.4, diveR: 0.4, out: 1.8, spread: 0.8, wait: 0.2 } },
-    { name: 'ニアを固める型', z: 0.6, move: 'track', bias: 0.5, react: 0.22, speed: 2.8,
+    { id: 'near', z: 0.6, move: 'track', bias: 0.5, react: 0.22, speed: 2.8,
       commit: { star: 0.6, low: 0.8, diveL: 1.4, diveR: 0.6, out: 0.5, spread: 0.6, wait: 0.6 } },
-    { name: '左右に揺さぶる型', z: 0.7, move: 'sway', bias: 0, react: 0.24, speed: 3.4,
+    { id: 'sway', z: 0.7, move: 'sway', bias: 0, react: 0.24, speed: 3.4,
       commit: { star: 0.8, low: 0.8, diveL: 1.3, diveR: 1.3, out: 0.4, spread: 0.5, wait: 0.3 } },
-    { name: 'フェイント型', z: 0.65, move: 'feint', bias: 0.1, react: 0.2, speed: 3.6,
+    { id: 'feint', z: 0.65, move: 'feint', bias: 0.1, react: 0.2, speed: 3.6,
       commit: { star: 0.7, low: 0.9, diveL: 1.1, diveR: 1.1, out: 0.5, spread: 0.9, wait: 0.4 } },
-    { name: 'ゴールライン型', z: 0.3, move: 'restless', bias: -0.1, react: 0.16, speed: 3.0,
+    { id: 'line', z: 0.3, move: 'restless', bias: -0.1, react: 0.16, speed: 3.0,
       commit: { star: 1.4, low: 1.2, diveL: 0.5, diveR: 0.5, out: 0.3, spread: 0.8, wait: 0.5 } },
-    { name: '大の字ジャンプ型', z: 0.8, move: 'advance', bias: 0.1, react: 0.2, speed: 2.8,
+    { id: 'star', z: 0.8, move: 'advance', bias: 0.1, react: 0.2, speed: 2.8,
       commit: { star: 2.6, low: 0.3, diveL: 0.4, diveR: 0.4, out: 0.6, spread: 0.6, wait: 0.2 } },
   ];
-  const COMMIT_LABEL = {
-    star: '大の字ジャンプ！', low: 'しゃがんだ！', diveL: '左に倒れた！', diveR: '右に倒れた！',
-    out: '前に出てきた！', spread: '両手を広げた！', wait: 'じっと待っている…',
-  };
   // ナビ: キーパーの決め打ちに効くシュート(ボタン名とコース)
   const COUNTER = {
     star: { btn: 'bound', jx: 0.8, jy: -0.8 }, low: { btn: 'loop', jx: 0.7, jy: 0.8 },
@@ -440,9 +438,9 @@
   let player = null, keeper = null, ball = null, footprints = [], cheer = 0, hintBtn = null, jumpHint = false;
   let mate = null, pass = null;
   const PASS_TYPES = {
-    direct: { name: '直接パス', T: 0.5 },
-    bounce: { name: 'バウンドパス', T: 0.62 },
-    lob: { name: '山なりパス', T: 0.85 },
+    direct: { T: 0.5 },
+    bounce: { T: 0.62 },
+    lob: { T: 0.85 },
   };
 
   function newAttempt() {
@@ -473,7 +471,7 @@
     game.phase = 'play';
     game.lineFlash = 0;
     // 構えて待つ → ホイッスル → パス
-    showMsg(`${game.shotNo}本目`, `${spot.name} ／ GK：${kt.name}`, 'info', READY_T - 0.1);
+    showMsg(t('msg.shotN', { n: game.shotNo }), t('msg.spotGk', { spot: t(spot.key), gk: t('gk.' + kt.id) }), 'info', READY_T - 0.1);
     updateHud();
   }
 
@@ -481,8 +479,10 @@
     initAudio();
     goLandscape();
     game.score = 0; game.shotNo = 0; game.goals = 0; game.combo = 0; game.history = [];
+    game.bestCombo = 0; game.musaGoals = 0;
     game.paused = false; game.newRecord = false;
     $('#title').classList.remove('show');
+    $('#help').classList.remove('show');
     $('#result').classList.remove('show');
     $('#pause').classList.remove('show');
     Scene3D.clearConfetti();
@@ -495,7 +495,19 @@
     $('#result').classList.remove('show');
     $('#pause').classList.remove('show');
     $('#title').classList.add('show');
-    $('#titleBest').textContent = game.best;
+    showTitleTexts();
+  }
+  function showTitleTexts() {
+    $('#titleBest').textContent = t('best.title', { b: game.best });
+    document.querySelectorAll('.langBtn').forEach((b) => b.classList.toggle('on', b.dataset.lang === I18N.lang));
+  }
+  // 言語の切り替え(タイトル画面)。表示中の結果画面も出し直す
+  function setLang(l) {
+    I18N.set(l);
+    showTitleTexts();
+    hudKey = '';
+    updateHud();
+    if (game.phase === 'over') showResult();
   }
 
   // スマホは全画面・横向きに(対応しているブラウザだけ)
@@ -508,34 +520,130 @@
     } catch (e) { /* 非対応 */ }
   }
 
+  function rankOf(s) { return s >= 6800 ? 'S' : s >= 4400 ? 'A' : s >= 2400 ? 'B' : s >= 1000 ? 'C' : 'D'; }
+  function navLabel() { return t(game.nav ? 'nav.on' : 'nav.off'); }
   function endGame() {
     game.phase = 'over';
     const s = game.score;
-    const rank = s >= 6800 ? 'S' : s >= 4400 ? 'A' : s >= 2400 ? 'B' : s >= 1000 ? 'C' : 'D';
     if (s > game.best) { game.best = s; saveNum('musasabi.best', s); game.newRecord = true; }
-    $('#rank').textContent = rank;
-    $('#finalScore').textContent = `${s} 点 ／ ${game.goals} / ${TOTAL_SHOTS} ゴール（${game.nav ? 'ナビあり' : 'ナビなし'}）`;
-    $('#newRecord').textContent = game.newRecord ? 'ベスト記録更新！' : `ベスト ${game.best} 点`;
-    $('#history').innerHTML = game.history.map((h, i) => `<li class="${h.ok ? 'g' : 'x'}"><span>${i + 1}</span>${h.text}</li>`).join('');
+    showResult();
     $('#result').classList.add('show');
     if (game.goals >= TOTAL_SHOTS * 0.6) { Scene3D.confetti(1.6); sfx.cheer(1.2); cheer = 1; }
   }
-
-  function finishAttempt(ok, text) {
-    game.phase = 'result';
-    game.waitT = ok ? 3.2 : 2.6;
-    game.history.push({ ok, text });
-    updateHud();
+  function showResult() {
+    const s = game.score;
+    $('#rank').textContent = rankOf(s);
+    $('#finalScore').textContent = t('result.score', { s, g: game.goals, t: TOTAL_SHOTS, nav: navLabel() });
+    $('#newRecord').textContent = game.newRecord ? t('result.newRecord') : t('result.best', { b: game.best });
+    $('#history').innerHTML = game.history.map((h, i) => `<li class="${h.ok ? 'g' : 'x'}"><span>${i + 1}</span>${historyText(h)}</li>`).join('');
+    prepareShare();
   }
 
-  function foul(title, sub) {
+  // ================= シェア(X・LINE・コピー・成績画像) =================
+  function withUrl(text) { return text + '\n' + SHARE_URL; }
+  function shareText() {
+    return t('share.text', {
+      g: game.goals, t: TOTAL_SHOTS, p: game.goals === TOTAL_SHOTS ? t('share.perfect') : '', r: rankOf(game.score),
+      s: game.score, nav: navLabel(), m: game.musaGoals, c: game.bestCombo,
+    });
+  }
+  function prepareShare() {
+    const text = shareText();
+    $('#shareX').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(SHARE_URL);
+    $('#shareLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(withUrl(text));
+    $('#shareMsg').textContent = t(navigator.share ? 'share.msg.image' : 'share.msg.links');
+  }
+  // 成績カード画像(1200x630)。室内の競技場らしく、木の床と紙吹雪
+  function makeShareImage() {
+    const c = document.createElement('canvas');
+    c.width = 1200; c.height = 630;
+    const g = c.getContext('2d');
+    const bg = g.createLinearGradient(0, 0, 0, 630);
+    bg.addColorStop(0, '#0d1220'); bg.addColorStop(0.6, '#1c2a4a'); bg.addColorStop(1, '#2a3550');
+    g.fillStyle = bg; g.fillRect(0, 0, 1200, 630);
+    // 天井の照明
+    for (let i = 0; i < 6; i++) {
+      const x = 100 + i * 200, rg = g.createRadialGradient(x, 30, 0, x, 30, 90);
+      rg.addColorStop(0, 'rgba(255,255,230,0.8)'); rg.addColorStop(1, 'rgba(255,255,230,0)');
+      g.fillStyle = rg; g.fillRect(x - 90, 0, 180, 120);
+    }
+    // 木の床
+    const fl = g.createLinearGradient(0, 520, 0, 630);
+    fl.addColorStop(0, '#d98a3d'); fl.addColorStop(1, '#b8692a');
+    g.fillStyle = fl; g.fillRect(0, 520, 1200, 110);
+    g.strokeStyle = 'rgba(90,45,10,0.3)'; g.lineWidth = 2;
+    for (let x = 0; x < 1200; x += 40) { g.beginPath(); g.moveTo(x, 520); g.lineTo(x - 30, 630); g.stroke(); }
+    g.fillStyle = '#3d7fd0'; g.beginPath(); g.ellipse(600, 640, 420, 70, 0, Math.PI, 0); g.fill();
+    // 紙吹雪
+    const cols = ['#ff4757', '#ffd32a', '#2ed573', '#1e90ff', '#ff6bcb', '#ffffff', '#ffa502'];
+    for (let i = 0; i < 160; i++) {
+      g.save(); g.translate(Math.random() * 1200, Math.random() * 500); g.rotate(Math.random() * 6.28);
+      g.fillStyle = cols[i % cols.length]; g.fillRect(-5, -8, 10, 16); g.restore();
+    }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const font = (w, sz) => `${w} ${sz}px "Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif`;
+    g.fillStyle = '#9fd8ff'; g.font = font(800, 36); g.fillText(t('card.head', { nav: navLabel() }), 600, 80, 1100);
+    const gold = g.createLinearGradient(0, 130, 0, 290);
+    gold.addColorStop(0, '#fff6c4'); gold.addColorStop(0.5, '#ffd000'); gold.addColorStop(1, '#ff8a00');
+    g.fillStyle = gold; g.font = font(900, 120); g.fillText(t('card.goals', { g: game.goals, t: TOTAL_SHOTS }), 600, 210, 1100);
+    g.fillStyle = '#ff9d3c'; g.font = font(900, 54); g.fillText(t('card.rank', { r: rankOf(game.score) }), 600, 340, 1100);
+    g.fillStyle = '#ffffff'; g.font = font(800, 40);
+    g.fillText(t('card.line1', { s: game.score, m: game.musaGoals, c: game.bestCombo }), 600, 440, 1100);
+    g.fillStyle = '#fff4e6'; g.font = font(700, 28); g.fillText(t('card.tags'), 600, 585);
+    return new Promise((res) => c.toBlob(res, 'image/png'));
+  }
+  async function shareResult() {
+    const text = shareText();
+    if (navigator.share) {
+      try {
+        const blob = await makeShareImage();
+        const file = blob && new File([blob], 'musasabi-shoot-result.png', { type: 'image/png' });
+        const data = { title: t('share.title'), text: withUrl(text) };
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })) data.files = [file];
+        await navigator.share(data);
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // 共有シートを閉じただけ
+      }
+    }
+    copyResult();
+  }
+  async function copyResult() {
+    const text = withUrl(shareText());
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { /* 非対応 */ }
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta);
+        ta.select(); ok = document.execCommand('copy'); ta.remove();
+      } catch (e) { /* 非対応 */ }
+    }
+    $('#shareMsg').textContent = t(ok ? 'share.copied' : 'share.copyFail');
+  }
+
+  function finishAttempt(ok, rec) {
+    game.phase = 'result';
+    game.waitT = ok ? 3.2 : 2.6;
+    game.history.push(Object.assign({ ok }, rec));
+    updateHud();
+  }
+  function shotLabel(timing, type) { return t('shot.label', { timing: t('timing.' + timing), type: t('shot.' + type) }); }
+  // 結果画面の1行(言語を切り替えても出し直せるよう、記録から組み立てる)
+  function historyText(h) {
+    if (h.kind === 'foul') return t('hist.foul', { f: t('foul.' + h.foul) });
+    return t('hist.' + h.kind, { label: shotLabel(h.timing, h.type), pts: h.pts });
+  }
+
+  // key: 'over' | 'line' | 'noshot' | 'late'、subKey: 説明の文言
+  function foul(key, subKey) {
     if (game.phase !== 'play') return;
     sfx.whistle();
-    showMsg(title, sub, 'fail', 2.2);
+    showMsg(t('foul.' + key), t(subKey || 'foul.' + key + '.sub'), 'fail', 2.2);
     game.combo = 0;
     if (player.state === 'run') player.state = 'stop';
     keeper.result = 'foul';
-    finishAttempt(false, `失敗：${title}`);
+    finishAttempt(false, { kind: 'foul', foul: key });
     $('#steps').classList.add('foul');
   }
 
@@ -553,7 +661,7 @@
     p.dashSteps++;
     if (p.dashSteps >= MUSA_STEPS && !p.musaLocked) {
       p.musaLocked = true; sfx.squeak();
-      showMsg('ムササビOK！', 'ジャンプボタンがムササビに変わった', 'musa', 0.7);
+      showMsg(t('msg.musaOk'), t('msg.musaOk.sub'), 'musa', 0.7);
     }
   }
   // ジャンプボタン: ふだんはジャンプ、受けてからダッシュで2歩踏んだらムササビ
@@ -587,7 +695,7 @@
     }
     if (musa) {
       p.vy = 4.0;
-      showMsg('ムササビ！', '長い滞空時間でキーパーの動きを見極めろ', 'musa', 1.0);
+      showMsg(t('msg.musa'), t('msg.musa.sub'), 'musa', 1.0);
       keeper.commitAt = rand(0.45, 1.15);
     } else {
       p.vy = 4.4;
@@ -711,7 +819,7 @@
       if (p.readyT <= 0) {
         p.state = 'pass';
         sfx.startWhistle();
-        showMsg('ピッ！', `${PASS_TYPES[pass.type].name}が来るぞ`, 'info', 0.9);
+        showMsg(t('msg.whistle'), t('msg.passComing', { p: t('pass.' + pass.type) }), 'info', 0.9);
       }
     } else if (p.state === 'pass') {
       // パスを受けるまで少し走る(歩数はまだ数えない)
@@ -743,11 +851,11 @@
           const side = p.steps % 2 ? -1 : 1;
           footprints.push({ x: p.x + Math.cos(p.heading) * 0.13 * side, z: p.z + Math.sin(p.heading) * 0.13 * side, n: p.steps, a: p.heading });
           sfx.squeak();
-          if (p.steps === 3) showMsg('3歩！', musaReady() ? '左足で踏み切ってムササビ！' : '次の1歩は反則。今すぐ跳べ！', musaReady() ? 'musa' : 'info', 0.6);
-          if (p.steps >= 4) foul('オーバーステップ', '4歩目を踏んでしまった！');
+          if (p.steps === 3) showMsg(t('msg.step3'), t(musaReady() ? 'msg.step3.musa' : 'msg.step3.jump'), musaReady() ? 'musa' : 'info', 0.6);
+          if (p.steps >= 4) foul('over');
           updateHud();
         }
-        if (areaDist(p.x, p.z) < AREA_R) { game.lineFlash = 2; foul('ラインクロス', '6mラインを踏んでしまった！'); }
+        if (areaDist(p.x, p.z) < AREA_R) { game.lineFlash = 2; foul('line'); }
       }
       p.animPh = (p.steps + p.stepT / STEP_INTERVAL) * Math.PI;
       // ダッシュ中は歩幅が大きく、前傾
@@ -763,7 +871,7 @@
       const k = clamp(p.takeoffT / p.takeoffDur, 0, 1);
       p.vx *= Math.exp(-2.5 * dt); p.vz *= Math.exp(-2.5 * dt);
       p.x += p.vx * dt; p.z += p.vz * dt;
-      if (game.phase === 'play' && areaDist(p.x, p.z) < AREA_R) { game.lineFlash = 2; foul('ラインクロス', '踏み切りで6mラインを踏んでしまった！'); }
+      if (game.phase === 'play' && areaDist(p.x, p.z) < AREA_R) { game.lineFlash = 2; foul('line', 'foul.line.takeoff'); }
       target = runPose(Math.PI * 1.5, true);
       const sink = Math.sin(Math.PI * Math.min(1, k * 1.2)) * 0.2;
       for (const n of JOINTS) if (n !== 'ftL' && n !== 'ftR') target[n][1] -= sink * (n.startsWith('kn') ? 0.6 : 1);
@@ -800,8 +908,8 @@
       if (p.vy < 0 && p.airT > 0.15 && (p.y <= 0 || lowestJoint(p) <= 0.03)) {
         p.state = 'ground'; p.slide = p.musasabi; p.groundT = 0;
         if (!p.musasabi) p.y = 0;
-        if (!p.shot) foul('シュートできず', 'シュートする前に着地してしまった！');
-        else if (!p.released) foul('間に合わず', '投げ終わる前に着地してしまった！');
+        if (!p.shot) foul('noshot');
+        else if (!p.released) foul('late');
         else sfx.bounce();
       }
     } else { // ground
@@ -869,7 +977,7 @@
     if (u >= 1) { // キャッチ。ここから歩数を数える
       p.state = 'run'; p.stepT = 0; p.steps = 0;
       sfx.catch();
-      showMsg('キャッチ！', '3歩以内に跳べ', 'info', 0.7);
+      showMsg(t('msg.catch'), t('msg.catch.sub'), 'info', 0.7);
     }
   }
 
@@ -910,7 +1018,7 @@
     const k = keeper;
     const c = weighted(k.type.commit);
     k.committed = c;
-    k.label = COMMIT_LABEL[c]; k.labelT = 1.6;
+    k.label = c; k.labelT = 1.6; // 吹き出しの文言は表示するときに今の言語で
     if (c === 'wait') return;
     if (c === 'diveL') k.toff = k.off - 0.35;
     if (c === 'diveR') k.toff = k.off + 0.35;
@@ -1063,8 +1171,8 @@
             b.vy = -b.vy * (0.45 + 0.1 * b.spinPower); b.vz *= 0.78;
             const tt = b.z / Math.max(0.5, -b.vz);
             b.vx = (b.tx - b.x) / tt;
-            const pw = b.spinPower >= 1.2 ? '強' : b.spinPower >= 0.85 ? '中' : '弱';
-            game.pops.push({ x: b.x, y: 0.5, z: b.z, text: `キュッ！ キレ${pw}`, t: 1.0, color: '#ffb03a' });
+            const pw = t(b.spinPower >= 1.2 ? 'spin.strong' : b.spinPower >= 0.85 ? 'spin.mid' : 'spin.weak');
+            game.pops.push({ x: b.x, y: 0.5, z: b.z, text: t('pop.spin', { p: pw }), t: 1.0, color: '#ffb03a' });
           } else {
             b.vy = -b.vy * 0.58; b.vz *= 0.9; b.vx *= 0.9;
           }
@@ -1109,7 +1217,7 @@
     b.state = kind;
     if (game.phase !== 'play') return;
     keeper.result = kind === 'save' ? 'save' : kind === 'goal' ? 'goal' : 'miss';
-    const label = `${TIMINGS[b.timing].name}・${SHOT_TYPES[b.type].name}シュート`;
+    const label = shotLabel(b.timing, b.type);
     if (kind === 'goal') {
       game.combo++; game.goals++;
       let pts = Math.round(SHOT_TYPES[b.type].pts * TIMINGS[b.timing].mult);
@@ -1117,18 +1225,20 @@
       if (corner) pts += 50;
       if (game.combo > 1) pts += 50 * (game.combo - 1);
       game.score += pts;
-      showMsg('GOAL!!', `${label}　+${pts}${corner ? '（隅！）' : ''}${game.combo > 1 ? `　${game.combo}連続！` : ''}`, 'goal', 2.6);
+      game.bestCombo = Math.max(game.bestCombo, game.combo);
+      if (b.timing === 'musasabi') game.musaGoals++;
+      showMsg(t('msg.goal'), `${label}  +${pts}${corner ? t('msg.corner') : ''}${game.combo > 1 ? t('msg.combo', { c: game.combo }) : ''}`, 'goal', 2.6);
       sfx.net(); sfx.cheer(b.timing === 'musasabi' ? 1.3 : 1);
       Scene3D.confetti(b.timing === 'musasabi' ? 1.6 : 1);
       cheer = 1;
-      finishAttempt(true, `GOAL ${label} +${pts}`);
+      finishAttempt(true, { kind: 'goal', timing: b.timing, type: b.type, pts });
     } else {
       game.combo = 0;
-      if (kind === 'save') { sfx.save(); showMsg('セーブ…', `${label}はキーパーに止められた`, 'fail', 2.2); }
-      else if (kind === 'post') { sfx.post(); showMsg('ポスト！', `${label}は枠に嫌われた`, 'fail', 2.2); }
-      else showMsg('はずれ…', `${label}は枠の外`, 'fail', 2.2);
+      if (kind === 'save') sfx.save();
+      if (kind === 'post') sfx.post();
+      showMsg(t('msg.' + kind), t('msg.' + kind + '.sub', { label }), 'fail', 2.2);
       sfx.groan();
-      finishAttempt(false, `${{ save: 'セーブ', post: 'ポスト', miss: '枠外' }[kind]}　${label}`);
+      finishAttempt(false, { kind, timing: b.timing, type: b.type });
     }
   }
 
@@ -1194,7 +1304,6 @@
     jump: { x: 560, y: 440, r: 54, key: 'Space' },
     dash: { x: 560, y: 568, r: 50, key: 'Shift' },
   };
-  const BTN_SUB = { loop: '高く山なり', normal: '速いシュート', spinL: '左へ切れる', spinR: '右へ切れる', bound: '足元を抜く' };
   const pointers = new Map(); // pointerId -> 'ring' | ボタンの名前 | 'none'
   const ringInput = { active: false, mx: 0, my: 0 };
 
@@ -1328,10 +1437,10 @@
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('高く', RING.x, RING.y - RING.r - 6);
-    ctx.fillText('低く', RING.x, RING.y + RING.r + 15);
-    ctx.fillText('左', RING.x - RING.r - 12, RING.y + 4);
-    ctx.fillText('右', RING.x + RING.r + 12, RING.y + 4);
+    ctx.fillText(t('ring.high'), RING.x, RING.y - RING.r - 6);
+    ctx.fillText(t('ring.low'), RING.x, RING.y + RING.r + 15);
+    ctx.fillText(t('ring.left'), RING.x - RING.r - 14, RING.y + 4);
+    ctx.fillText(t('ring.right'), RING.x + RING.r + 14, RING.y + 4);
     const kx = RING.x + mx * RING.r * 0.6, ky = RING.y - my * RING.r * 0.6;
     ctx.fillStyle = mag > 0.1 ? '#ffe14d' : 'rgba(255,255,255,0.6)';
     ctx.beginPath(); ctx.arc(kx, ky, RING.r * 0.17, 0, Math.PI * 2); ctx.fill();
@@ -1383,17 +1492,17 @@
           ctx.restore();
         }
         ctx.font = `900 ${Math.round(15 * fk)}px sans-serif`;
-        ctx.fillText('ダッシュ', b.x, b.y + 2 * fk, r * 1.8);
+        ctx.fillText(t('btn.dash'), b.x, b.y + 2 * fk, r * 1.8);
         ctx.font = `bold ${Math.round(9.5 * fk)}px sans-serif`;
-        ctx.fillText(musaReady() ? 'ムササビOK' : `${MUSA_STEPS}歩でムササビ`, b.x, b.y + 16 * fk, r * 1.7);
+        ctx.fillText(musaReady() ? t('btn.dash.ok') : t('btn.dash.sub', { n: MUSA_STEPS }), b.x, b.y + 16 * fk, r * 1.7);
       } else if (isJump) {
         ctx.font = `900 ${Math.round((musa ? 19 : 17) * fk)}px sans-serif`;
-        ctx.fillText(musa ? 'ムササビ' : 'ジャンプ', b.x, b.y + 6 * fk, r * 1.8);
+        ctx.fillText(t(musa ? 'btn.musa' : 'btn.jump'), b.x, b.y + 6 * fk, r * 1.8);
       } else {
         ctx.font = `bold ${Math.round(16 * fk)}px sans-serif`;
-        ctx.fillText(SHOT_TYPES[name].name, b.x, b.y + 8 * fk, b.r * 1.7);
+        ctx.fillText(t('shot.' + name), b.x, b.y + 8 * fk, b.r * 1.7);
         ctx.font = `bold ${Math.round(9.5 * fk)}px sans-serif`;
-        ctx.fillText(BTN_SUB[name], b.x, b.y + 22 * fk, b.r * 1.6);
+        ctx.fillText(t('shotsub.' + name), b.x, b.y + 22 * fk, b.r * 1.6);
       }
       if (!isTouch) { ctx.font = '10px sans-serif'; ctx.fillStyle = held || musa ? '#2a1400' : 'rgba(255,255,255,0.8)'; ctx.fillText(b.key, b.x, b.y + r - 6); }
     }
@@ -1473,7 +1582,8 @@
       if (!top.behind) {
         const fs = 18;
         ctx.font = `bold ${fs}px sans-serif`;
-        const w = ctx.measureText(k.label).width + 18;
+        const label = t('commit.' + k.label);
+        const w = ctx.measureText(label).width + 18;
         ctx.globalAlpha = clamp(k.labelT * 2, 0, 1);
         ctx.fillStyle = 'rgba(255,255,255,.95)';
         ctx.beginPath();
@@ -1481,7 +1591,7 @@
         ctx.fill();
         ctx.beginPath(); ctx.moveTo(top.x - 7, top.y + 4); ctx.lineTo(top.x, top.y + 12); ctx.lineTo(top.x + 7, top.y + 4); ctx.fill();
         ctx.fillStyle = '#d02020'; ctx.textBaseline = 'middle';
-        ctx.fillText(k.label, top.x, top.y - fs / 2 - 3);
+        ctx.fillText(label, top.x, top.y - fs / 2 - 3);
         ctx.textBaseline = 'alphabetic';
         ctx.globalAlpha = 1;
       }
@@ -1493,8 +1603,8 @@
         ctx.font = '900 26px sans-serif';
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.fillStyle = musaReady() ? '#ffd84a' : '#ff9a3c';
-        const t = musaReady() ? 'ムササビ！' : '跳べ！';
-        ctx.strokeText(t, p.x, p.y); ctx.fillText(t, p.x, p.y);
+        const txt = t(musaReady() ? 'nav.musa' : 'nav.jump');
+        ctx.strokeText(txt, p.x, p.y); ctx.fillText(txt, p.x, p.y);
       }
     }
   }
@@ -1543,18 +1653,18 @@
   function updateHud() {
     const n = player ? player.steps : 0;
     const chance = !!player && musaReady() && player.state === 'run' && game.phase === 'play';
-    const key = `${game.score}|${game.shotNo}|${n}|${chance}|${game.phase}|${game.best}|${game.nav}|${muted}`;
+    const key = `${game.score}|${game.shotNo}|${n}|${chance}|${game.phase}|${game.best}|${game.nav}|${muted}|${I18N.lang}`;
     if (key === hudKey) return;
     hudKey = key;
     $('#score').textContent = game.score;
     $('#best').textContent = game.best;
-    $('#shotInfo').textContent = `${Math.max(1, Math.min(game.shotNo, TOTAL_SHOTS))} / ${TOTAL_SHOTS} 本目`;
+    $('#shotInfo').textContent = t('hud.shot', { n: Math.max(1, Math.min(game.shotNo, TOTAL_SHOTS)), t: TOTAL_SHOTS });
     const st = $('#steps');
     st.querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < n));
     st.classList.toggle('chance', chance);
     if (game.phase === 'play') st.classList.remove('foul');
     $('#hud').style.visibility = game.phase === 'title' ? 'hidden' : 'visible';
-    $('#navBtn').textContent = `ナビ ${game.nav ? 'ON' : 'OFF'}`;
+    $('#navBtn').textContent = t('hud.nav', { s: game.nav ? 'ON' : 'OFF' });
     $('#navBtn').classList.toggle('on', game.nav);
     $('#muteBtn').textContent = muted ? '🔇' : '🔊';
   }
@@ -1572,6 +1682,11 @@
   $('#navBtn').addEventListener('click', toggleNav);
   $('#muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
   $('#startBtn').addEventListener('click', startGame);
+  $('#helpBtn').addEventListener('click', () => { $('#title').classList.remove('show'); $('#help').classList.add('show'); $('#help').scrollTop = 0; });
+  $('#helpBack').addEventListener('click', () => { $('#help').classList.remove('show'); $('#title').classList.add('show'); });
+  document.querySelectorAll('.langBtn').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+  $('#shareBtn').addEventListener('click', () => { initAudio(); shareResult(); });
+  $('#shareCopy').addEventListener('click', copyResult);
   $('#retryBtn').addEventListener('click', startGame);
   $('#titleBtn').addEventListener('click', goTitle);
   $('#resumeBtn').addEventListener('click', togglePause);
@@ -1682,7 +1797,8 @@
   Scene3D.init($('#view'));
   window.addEventListener('resize', resize);
   resize();
-  $('#titleBest').textContent = game.best;
+  I18N.apply();
+  showTitleTexts();
   updateHud();
 
   let last = performance.now(), acc = 0;
