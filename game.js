@@ -27,20 +27,21 @@
   const JOG_STEP = 0.38, DASH_STEP = 0.36;
   const TOTAL_SHOTS = 20;        // 1ゲームの本数
   const READY_T = 1.4;          // ホイッスルまでの間 (秒)
-  const MUSA_DASH = 2.0;        // ダッシュをこの秒数だけ長押しするとムササビになる
+  let MUSA_STEPS = 2;           // パスを受けてからダッシュでこの歩数を踏むとムササビになる
   const DT = 1 / 120;
 
   // 開始位置(画面右のサイド。右利きがプロンジョンを使う側)。毎回どれかを選び、範囲の中で少しずつ変わる
   //   サイドはゴール左右のコーナー寄りに位置取り、ボールが来る前に走り出して、走り込みながら受ける
   //   path: 走るコース(順に向かう点)。最後は6mラインに向かって切れ込む。
   //   ダッシュは歩幅が大きいので、ゴールに近い所でダッシュすると3歩目でラインに入ってしまう(ふつうの歩幅なら届かない)。
+  //   approach: パスを受けるまで走る速さ(初期条件。プレイヤーは操作しない)
   //   mate: パスを出す味方の位置
   const START_SPOTS = [
-    { name: '右コーナーから', x: [8.6, 9.5], z: [1.4, 2.8], path: [[7.8, 5.6], [1.0, 5.7]],
+    { name: '右コーナーから', x: [8.6, 9.5], z: [1.4, 2.8], approach: 1.8, path: [[7.8, 5.6], [1.0, 5.7]],
       mate: { x: [3.6, 5.4], z: [9.8, 11.2] }, hint: 'ゴールライン際から上がって受ける。角度がないので早めに跳ぼう' },
-    { name: 'サイドの定位置から', x: [9.0, 9.7], z: [5.0, 7.0], path: [[1.0, 5.7]],
+    { name: 'サイドの定位置から', x: [9.0, 9.7], z: [5.0, 7.0], approach: 2.0, path: [[1.0, 6.2]],
       mate: { x: [3.6, 5.6], z: [10.2, 11.6] }, hint: '中央へ切れ込んで受ける' },
-    { name: 'サイドライン沿いに走り込んで', x: [9.0, 9.6], z: [9.0, 10.0], path: [[8.4, 7.4], [1.0, 5.7]],
+    { name: 'サイドライン沿いに走り込んで', x: [9.0, 9.6], z: [9.0, 10.0], approach: 3.0, path: [[8.4, 7.4], [1.0, 5.7]],
       mate: { x: [1.0, 3.0], z: [12.5, 14.0] }, hint: 'サイドラインに沿って走り、曲線を描いてセンターへ寄る' },
   ];
 
@@ -451,7 +452,7 @@
     const path = spot.path.map(([px, pz]) => [px + rand(-0.4, 0.4), pz + rand(-0.4, 0.4)]);
     const base = Math.atan2(path[0][0] - x, -(path[0][1] - z)); // 進む向き: (sin a, -cos a)
     player = {
-      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, path, spot, state: 'ready', readyT: READY_T, dashT: 0, steps: 0, stepT: 0, lean: 0, side: 1,
+      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, path, spot, state: 'ready', readyT: READY_T, dashSteps: 0, preStepT: 0, steps: 0, stepT: 0, lean: 0, side: 1,
       musasabi: false, shot: false, airT: 0, shotT: 0, groundT: 0, animPh: 0, slide: false,
       j: copyPose(runPose(0)),
     };
@@ -540,22 +541,21 @@
 
   // ================= 入力の判定 =================
   function canJump() { return game.phase === 'play' && player && player.state === 'run'; }
-  // ダッシュを MUSA_DASH 秒長押ししたらムササビになる(構えている間からためられる。離すと0に戻る)
-  // 一度ムササビになったら、跳ぶまでムササビのまま(ダッシュを離して同じ指でタップできるように)
-  function musaReady() { return !!player && (player.musaLocked || player.dashT >= MUSA_DASH); }
+  // パスを受けてからダッシュで MUSA_STEPS 歩踏んだらムササビになる(受けるまでは初期条件で、操作しない)。
+  // 一度なったら、跳ぶまでムササビのまま(ダッシュを離して同じ指でタップできるように)
+  function musaReady() { return !!player && !!player.musaLocked; }
   function canMusa() { return canJump() && musaReady(); }
-  function updateDashCharge(dt) {
-    const p = player;
-    const ground = p.state === 'ready' || p.state === 'pass' || p.state === 'run' || p.state === 'takeoff';
-    if (!ground || game.phase !== 'play') return;
-    const before = p.dashT;
-    p.dashT = input.dash ? p.dashT + dt : 0;
-    if (before < MUSA_DASH && p.dashT >= MUSA_DASH && !p.musaLocked) { p.musaLocked = true; sfx.squeak(); showMsg('ムササビOK！', 'ジャンプボタンがムササビに変わった', 'musa', 0.7); }
-  }
   function canShoot() {
     return game.phase === 'play' && player && !player.shot && (player.state === 'run' || player.state === 'air');
   }
-
+  function addDashStep() {
+    const p = player;
+    p.dashSteps++;
+    if (p.dashSteps >= MUSA_STEPS && !p.musaLocked) {
+      p.musaLocked = true; sfx.squeak();
+      showMsg('ムササビOK！', 'ジャンプボタンがムササビに変わった', 'musa', 0.7);
+    }
+  }
   // ジャンプボタン: ふだんはジャンプ、ダッシュを2秒長押ししたらムササビ
   function pressJump() { if (canMusa()) doJump(true); else doJump(false); }
 
@@ -717,11 +717,11 @@
       // パスを受けるまで少し走る(歩数はまだ数えない)
       const h = steerHeading(p);
       p.heading += clamp(angDiff(h, p.heading), -3.2 * dt, 3.2 * dt);
-      const sp = input.dash ? JOG_SPEED : JOG_SPEED * 0.75; // 受けるまではゆっくり
+      const sp = p.spot.approach; // 受けるまでの走る速さは開始位置で決まる(操作しない)
       p.speed = sp;
       p.vx = sp * Math.sin(p.heading); p.vz = -sp * Math.cos(p.heading);
       p.x += p.vx * dt; p.z += p.vz * dt;
-      p.animPh += dt * Math.PI / STEP_INTERVAL * 0.85;
+      p.animPh += dt * Math.PI / JOG_STEP;
       target = pass.released && pass.t > pass.T - 0.25 ? catchPose(p.animPh) : runPose(p.animPh, false);
     } else if (p.state === 'run') {
       const h = steerHeading(p);
@@ -739,6 +739,7 @@
         if (p.stepT >= STEP_INTERVAL) {
           p.stepT -= STEP_INTERVAL;
           p.steps++;
+          if (input.dash) addDashStep();
           const side = p.steps % 2 ? -1 : 1;
           footprints.push({ x: p.x + Math.cos(p.heading) * 0.13 * side, z: p.z + Math.sin(p.heading) * 0.13 * side, n: p.steps, a: p.heading });
           sfx.squeak();
@@ -1207,7 +1208,7 @@
   function buttonOn(name) {
     if (!player || game.phase !== 'play') return false;
     if (name === 'jump') return canJump();
-    if (name === 'dash') return player.state === 'run' || player.state === 'pass' || player.state === 'ready';
+    if (name === 'dash') return player.state === 'run'; // 操作はパスを受けてから
     return canShoot();
   }
   function hitButton(p) {
@@ -1348,7 +1349,7 @@
       const isJump = name === 'jump';
       const musa = isJump && canMusa();
       const hint = enabled && blink && (hintBtn === name || (isJump && jumpHint && !musa) ||
-        (name === 'dash' && game.nav && (player.state === 'ready' || player.state === 'pass') && !input.dash));
+        (name === 'dash' && game.nav && player.state === 'run' && !musaReady() && !input.dash));
       ctx.globalAlpha = enabled ? 0.9 : 0.35;
       const r = musa ? b.r * (1.12 + 0.05 * Math.sin(game.time * 16)) : b.r;
       if (musa) {
@@ -1368,20 +1369,23 @@
       ctx.fillStyle = held || musa ? '#2a1400' : '#fff';
       ctx.textAlign = 'center';
       if (name === 'dash') {
-        // ムササビまでのため(黄色い輪)
-        const charge = clamp((player.dashT || 0) / MUSA_DASH, 0, 1);
-        if (charge > 0) {
+        // ムササビまでのため: ダッシュで踏んだ歩数を目盛りで(黄色が踏んだ歩)
+        {
+          const n = MUSA_STEPS, got = Math.min(n, player.dashSteps || 0), gap = 0.18;
           ctx.save();
           ctx.globalAlpha = 1;
-          ctx.strokeStyle = charge >= 1 ? '#ffd84a' : 'rgba(255,216,74,0.85)';
           ctx.lineWidth = 6 * fk; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.arc(b.x, b.y, r + 5 * fk, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge); ctx.stroke();
+          for (let i = 0; i < n; i++) {
+            const a0 = -Math.PI / 2 + (Math.PI * 2 / n) * i + gap / 2, a1 = a0 + Math.PI * 2 / n - gap;
+            ctx.strokeStyle = i < got ? '#ffd84a' : 'rgba(255,255,255,0.25)';
+            ctx.beginPath(); ctx.arc(b.x, b.y, r + 5 * fk, a0, a1); ctx.stroke();
+          }
           ctx.restore();
         }
         ctx.font = `900 ${Math.round(15 * fk)}px sans-serif`;
         ctx.fillText('ダッシュ', b.x, b.y + 2 * fk, r * 1.8);
         ctx.font = `bold ${Math.round(9.5 * fk)}px sans-serif`;
-        ctx.fillText(musaReady() ? 'ムササビOK' : `${MUSA_DASH}秒でムササビ`, b.x, b.y + 16 * fk, r * 1.7);
+        ctx.fillText(musaReady() ? 'ムササビOK' : `${MUSA_STEPS}歩でムササビ`, b.x, b.y + 16 * fk, r * 1.7);
       } else if (isJump) {
         ctx.font = `900 ${Math.round((musa ? 19 : 17) * fk)}px sans-serif`;
         ctx.fillText(musa ? 'ムササビ' : 'ジャンプ', b.x, b.y + 6 * fk, r * 1.8);
@@ -1499,7 +1503,7 @@
   const speedLines = Array.from({ length: 26 }, () => ({ y: Math.random(), x: Math.random(), l: rand(60, 160), s: rand(1.6, 3) }));
   function drawSpeedLines() {
     const p = player;
-    if (!p || !(p.state === 'run' || p.state === 'pass') || !input.dash || game.phase !== 'play') return;
+    if (!p || p.state !== 'run' || !input.dash || game.phase !== 'play') return;
     const k = clamp(((p.speed || 0) - JOG_SPEED) / (DASH_SPEED - JOG_SPEED), 0, 1);
     if (k < 0.2) return;
     ctx.save();
@@ -1588,7 +1592,6 @@
     readInput();
     if (player) {
       updatePass(dt);
-      updateDashCharge(dt);
       updatePlayer(dt);
       updateWindup(dt);
       updateKeeper(dt);
@@ -1698,7 +1701,7 @@
 
   // テスト・デバッグ用
   const api = window.MS = {
-    hold: false, game, input, update, doJump, doShoot, pressJump, pressCenter: pressJump, startGame, DT,
+    hold: false, game, input, update, setMusaSteps(n) { MUSA_STEPS = n; }, doJump, doShoot, pressJump, pressCenter: pressJump, startGame, DT,
     get player() { return player; }, get keeper() { return keeper; }, get ball() { return ball; },
   };
 })();
