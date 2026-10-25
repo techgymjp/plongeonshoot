@@ -712,6 +712,8 @@ window.Scene3D = (() => {
     adaptQuality(dt);
 
     const c = v.cam;
+    const fov = v.fov || 46;
+    if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
     camera.position.set(c.x, c.y, c.z);
     camera.lookAt(c.lx, c.ly, c.lz);
     renderer.render(scene, camera);

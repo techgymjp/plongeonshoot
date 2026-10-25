@@ -21,9 +21,9 @@
   const G = 9.8;
   const BALL_R = 0.095;
   const RUN_SPEED = 3.2;
-  const JOG_SPEED = 2.3, DASH_SPEED = 3.3;  // ふつう / ダッシュ長押し (m/s)
+  const JOG_SPEED = 2.3, DASH_SPEED = 4.4;  // ふつう / ダッシュ長押し (m/s)
   const STEP_INTERVAL = 0.36;   // 歩数の基準
-  const JOG_STEP = 0.42, DASH_STEP = 0.32;  // 1歩の間隔 (秒)
+  const JOG_STEP = 0.42, DASH_STEP = 0.29;  // 1歩の間隔 (秒)
   const TOTAL_SHOTS = 20;        // 1ゲームの本数
   const READY_T = 1.4;          // ホイッスルまでの間 (秒)
   const MUSA_DASH = 2.5;        // ダッシュをこの秒数だけ長押しするとムササビになる
@@ -354,6 +354,14 @@
     p.knL = [-0.42, 0.48, 0.05]; p.knR = [0.42, 0.48, 0.05]; p.ftL = [-0.62, 0.04, 0]; p.ftR = [0.62, 0.04, 0];
     p.hip = [0, 0.9, 0]; return p;
   })();
+  // ループに対してジャンプして両手を伸ばす
+  KP.leap = (() => {
+    const p = JSON.parse(JSON.stringify(KP.high));
+    for (const n of JOINTS) p[n][1] += 0.32;
+    p.knL = [-0.22, 0.75, 0.1]; p.knR = [0.22, 0.75, 0.1]; p.ftL = [-0.25, 0.4, 0]; p.ftR = [0.25, 0.4, 0];
+    p.haL = [-0.5, 2.62, 0.05]; p.haR = [0.5, 2.62, 0.05]; p.elL = [-0.36, 2.2, 0.05]; p.elR = [0.36, 2.2, 0.05];
+    return p;
+  })();
   KP.cheer = (() => {
     const p = JSON.parse(JSON.stringify(KP.ready));
     p.elL = [-0.32, 1.85, 0.05]; p.haL = [-0.42, 2.2, 0.05]; p.elR = [0.32, 1.85, 0.05]; p.haR = [0.42, 2.2, 0.05];
@@ -421,7 +429,7 @@
   // ================= ゲーム状態 =================
   const game = {
     phase: 'title', score: 0, shotNo: 0, goals: 0, combo: 0, history: [], waitT: 0, time: 0,
-    paused: false, slowT: 0, lineFlash: 0, nav: loadNum('musasabi.nav', true), best: loadNum('musasabi.best', 0),
+    paused: false, slowT: 0, lineFlash: 0, pops: [], nav: loadNum('musasabi.nav', true), best: loadNum('musasabi.best', 0),
   };
   const input = { jx: 0, jy: 0, dash: false, keys: new Set() };
   let player = null, keeper = null, ball = null, footprints = [], cheer = 0, hintBtn = null, jumpHint = false;
@@ -450,7 +458,7 @@
       speed: kt.speed, t: 0, j: copyPose(KP.ready), hopT: 0, hopX: 0, feintT: rand(0.3, 0.6), feintX: 0, result: null, resultT: 0,
       f: 0.5, off: 0, D: kt.z + 0.3, anchor: null, // f: 向き(0 = 正面)、off: 向きに対して横へずれる量、D: ゴールから前へ出る距離
     };
-    ball = null; footprints = [];
+    ball = null; footprints = []; game.pops = [];
     hintBtn = null; jumpHint = false;
     // 左バックの味方からパス。直接・バウンド・山なりのどれか
     const mx = rand(spot.mate.x[0], spot.mate.x[1]), mz = rand(spot.mate.z[0], spot.mate.z[1]);
@@ -529,7 +537,8 @@
   // ================= 入力の判定 =================
   function canJump() { return game.phase === 'play' && player && player.state === 'run'; }
   // ダッシュを MUSA_DASH 秒長押ししたらムササビになる(構えている間からためられる。離すと0に戻る)
-  function musaReady() { return !!player && player.dashT >= MUSA_DASH; }
+  // 一度ムササビになったら、跳ぶまでムササビのまま(ダッシュを離して同じ指でタップできるように)
+  function musaReady() { return !!player && (player.musaLocked || player.dashT >= MUSA_DASH); }
   function canMusa() { return canJump() && musaReady(); }
   function updateDashCharge(dt) {
     const p = player;
@@ -537,7 +546,7 @@
     if (!ground || game.phase !== 'play') return;
     const before = p.dashT;
     p.dashT = input.dash ? p.dashT + dt : 0;
-    if (before < MUSA_DASH && p.dashT >= MUSA_DASH) { sfx.squeak(); showMsg('ムササビOK！', 'ジャンプボタンがムササビに変わった', 'musa', 0.7); }
+    if (before < MUSA_DASH && p.dashT >= MUSA_DASH && !p.musaLocked) { p.musaLocked = true; sfx.squeak(); showMsg('ムササビOK！', 'ジャンプボタンがムササビに変わった', 'musa', 0.7); }
   }
   function canShoot() {
     return game.phase === 'play' && player && !player.shot && (player.state === 'run' || player.state === 'air');
@@ -556,6 +565,7 @@
   }
   function launch() {
     const p = player, musa = p.pendingMusa;
+    p.takeoffSpeed = p.speed || JOG_SPEED; // 助走のスピード(スピンのキレに効く)
     p.state = 'air'; p.musasabi = musa; p.airT = 0; p.lean = 0;
     const aGoal = Math.atan2(-p.x, p.z);
     if (musa) {
@@ -619,9 +629,13 @@
     const view = Math.abs(Math.atan2(GOAL_HW - sx, sz) - Math.atan2(-GOAL_HW - sx, sz));
     sig *= clamp(Math.pow(0.42 / Math.max(0.05, view), 0.8), 0.75, 2.4);
     const spinDir = type === 'spinL' ? -1 : type === 'spinR' ? 1 : 0;
-    if (type === 'loop' || spinDir) sig *= 1.15;
-    let tx = input.jx * 1.3 + gauss() * sig;
-    let ty = 1.0 + input.jy * 0.78 + gauss() * sig * 0.7;
+    if (type === 'loop') sig *= 1.6;   // 山なりはコースが定まりにくい
+    else if (spinDir) sig *= 1.15;
+    let ajx = input.jx, ajy = input.jy;
+    // 地上(ステップシュート)は方向キーがないので、方向が入っていなければファーの低めを狙う
+    if (timing === 'step' && Math.hypot(ajx, ajy) < 0.15) { ajx = -0.75 * Math.sign(player.x || 1); ajy = -0.4; }
+    let tx = ajx * 1.3 + gauss() * sig;
+    let ty = 1.0 + ajy * 0.78 + gauss() * sig * 0.7;
     // 体を倒すほど上のコースは打ちにくい
     if (player.musasabi) ty = Math.min(ty, 1.95 - player.lean * 0.75 + gauss() * 0.05);
     const b = { x: sx, y: sy, z: sz, vx: 0, vy: 0, vz: 0, type, timing, state: 'fly', bounced: false,
@@ -639,7 +653,11 @@
       if (spinDir) {
         // 左スピンはバウンドしてから左へ、右スピンは右へ切れる。逆側を狙うように見せる
         if (Math.abs(input.jx) < 0.2) tx = spinDir * rand(0.7, 1.05) + gauss() * sig * 0.5;
-        fakeX = clamp(tx - spinDir * 1.5, -1.7, 1.7);
+        // キレ: 助走のスピード(ダッシュ)と歩数で強くなる。強いほど逆を狙うように見せて大きく切り返す
+        const runSp = player.state === 'air' ? (player.takeoffSpeed || JOG_SPEED) : (player.speed || JOG_SPEED);
+        const dashK = clamp((runSp - JOG_SPEED) / (DASH_SPEED - JOG_SPEED), 0, 1);
+        b.spinPower = clamp(0.55 + 0.55 * dashK + 0.12 * player.steps, 0.55, 1.45);
+        fakeX = clamp(tx - spinDir * 1.6 * b.spinPower, -2.2, 2.2);
       }
       const xb = sx + (fakeX - sx) * s;
       setVel(b, xb, BALL_R, zb, (dist * s) / (spinDir ? 13 : 14.5));
@@ -671,16 +689,10 @@
     const t = p.path[0];
     p.base = Math.atan2(t[0] - p.x, -(t[1] - p.z));
   }
+  // 助走の向きはコースどおり(方向キーでは変えない)
   function steerHeading(p) {
     updateBase(p);
-    const m = Math.hypot(input.jx, input.jy);
-    if (m < 0.15) return p.base;
-    const fx = cam.lx - cam.x, fz = cam.lz - cam.z, fl = Math.hypot(fx, fz) || 1;
-    const nfx = fx / fl, nfz = fz / fl;            // 画面の奥
-    const rx = -nfz, rz = nfx;                     // 画面の右
-    const wx = input.jx * rx + input.jy * nfx, wz = input.jx * rz + input.jy * nfz;
-    const want = Math.atan2(wx, -wz);
-    return p.base + clamp(angDiff(want, p.base), -1.15, 1.15);
+    return p.base;
   }
 
   function updatePlayer(dt) {
@@ -734,6 +746,9 @@
       }
       p.animPh = (p.steps + p.stepT / STEP_INTERVAL) * Math.PI;
       target = runPose(p.animPh, false);
+      // ダッシュ中は前傾
+      const dk = clamp((p.speed - JOG_SPEED) / (DASH_SPEED - JOG_SPEED), 0, 1);
+      if (dk > 0.05) target = tiltPose(target, 0, 0.22 * dk);
       if (p.steps === 3 && p.stepT < 0.12) { // 3歩目(左足)で踏み切りの構え
         target = runPose(Math.PI * 1.5, true);
       }
@@ -863,7 +878,7 @@
   function keeperOnShot() {
     const k = keeper;
     // 立ち位置はここで決まり、あとは横への動きだけ
-    k.anchor = { x: k.x - Math.cos(k.f) * k.off, z: k.z + Math.sin(k.f) * k.off, f: k.f };
+    k.anchor = { ox: k.ox || 0, f: k.f };
     // 投げられた瞬間の軌道から読む(バウンドの変化は読めない)。キーパーの面を通る所の横位置と高さ
     const sf = Math.sin(k.f), cf = Math.cos(k.f);
     const depth0 = (ball.x - k.x) * sf + (ball.z - k.z) * cf;
@@ -875,9 +890,14 @@
     if (player.timing === 'step') delay += 0.09;      // 不意を突かれる
     if (player.timing === 'quick') delay += 0.08;
     if (k.committed) delay += 0.1;
+    const lob = py > 1.9; // 頭の上を越えるボールかどうかは、読み違えない
     // 読み違い
     if (!k.committed && Math.random() < 0.22) { px += rand(-0.8, 0.8); py = rand(0.2, 2.0); }
-    k.react = { x: px, y: py };
+    // ループ用: 下がった先(ゴールライン付近)でボールが通る横位置
+    const RD = 0.35, rax = (k.ox || 0) + sf * RD, raz = Math.max(0.25, cf * RD);
+    const tl = clamp((ball.z - raz) / Math.max(0.1, -ball.vz), 0, 3);
+    const lobX = (ball.x + ball.vx * tl - rax) * cf - (ball.z + ball.vz * tl - raz) * sf;
+    k.react = { x: px, y: py, lob, lobX: lobX + (Math.random() < 0.22 ? rand(-0.6, 0.6) : 0) };
     k.reactAt = k.t + delay;
   }
 
@@ -939,10 +959,18 @@
       const r = k.react;
       if (!k.committed || k.committed === 'wait' || k.committed === 'out') {
         const off = r.x - k.off;
-        if (r.y < 0.55) k.stance = Math.abs(off) > 0.5 ? (off < 0 ? 'lowL' : 'lowR') : 'low';
+        if (r.lob) k.stance = 'leap';
+        else if (r.y < 0.55) k.stance = Math.abs(off) > 0.5 ? (off < 0 ? 'lowL' : 'lowR') : 'low';
         else if (Math.abs(off) > 0.65 && Math.random() < 0.6) k.stance = off < 0 ? 'diveL' : 'diveR';
         else k.stance = r.y > 1.45 ? 'high' : 'ready';
-        if (k.stance === 'diveL') toff = r.x + 0.75;
+        // 頭の上を越えるボール(ループ)は、ゴールライン側へ下がりながらジャンプして手を伸ばす。前に飛び出していると戻りが遅い
+        if (r.lob) {
+          k.retreatD = 0.35;
+          k.retreatSpeed = k.committed === 'out' ? 1.0 : 2.4;
+          toff = r.lobX - Math.sign(r.lobX - k.off) * 0.35;
+        }
+        if (k.retreatD !== undefined) { /* ループは上で決めた横位置へ */ }
+        else if (k.stance === 'diveL') toff = r.x + 0.75;
         else if (k.stance === 'diveR') toff = r.x - 0.75;
         else if (k.stance === 'lowL') toff = r.x + 0.85;
         else if (k.stance === 'lowR') toff = r.x - 0.85;
@@ -956,12 +984,14 @@
     if (!k.result && k.committed === 'react') { toff = k.toff; speed = 4.2; }
     toff = clamp(toff, -1.5, 1.5);
     k.off += clamp(toff - k.off, -speed * dt, speed * dt);
-    k.D += clamp(D - k.D, -2.6 * dt, 2.6 * dt);
-    // 立ち位置(シュートまではシューターを追う。シュート後は固定)
+    if (!k.result && k.retreatD !== undefined) k.D += clamp(k.retreatD - k.D, -k.retreatSpeed * dt, k.retreatSpeed * dt);
+    else k.D += clamp(D - k.D, -2.6 * dt, 2.6 * dt);
+    // 立ち位置(シュートまではシューターを追う。シュート後は向きを固定し、前後(D)と横(off)だけ動く)
     let ax, az, f;
-    if (k.anchor) { ax = k.anchor.x; az = k.anchor.z; f = k.anchor.f; }
+    if (k.anchor) { f = k.anchor.f; ax = k.anchor.ox + Math.sin(f) * k.D; az = Math.max(0.25, Math.cos(f) * k.D); }
     else {
       const ox = Math.sign(sx) * k.type.bias * clamp(Math.abs(sx) / 4, 0, 1); // ニア寄りの点から線を引く
+      k.ox = ox;
       let ux = sx - ox, uz = sz; const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
       f = clamp(Math.atan2(ux, uz), -1.2, 1.2);
       k.f += clamp(angDiff(f, k.f), -3 * dt, 3 * dt);
@@ -989,7 +1019,7 @@
         pose.hip[1] += Math.sin(k.t * 12) * 0.015;
       }
     }
-    const fast = k.stance.startsWith('dive') || k.stance === 'star' ? 16 : 11;
+    const fast = k.stance.startsWith('dive') || k.stance === 'star' || k.stance === 'leap' ? 16 : 11;
     blendPose(k.j, pose, 1 - Math.exp(-fast * dt));
   }
 
@@ -1025,9 +1055,11 @@
         if (!b.bounced && (b.type === 'bound' || b.spin) && b.state === 'fly') {
           b.bounced = true;
           if (b.spin) {
-            b.vy = -b.vy * 0.5; b.vz *= 0.78;
+            b.vy = -b.vy * (0.45 + 0.1 * b.spinPower); b.vz *= 0.78;
             const tt = b.z / Math.max(0.5, -b.vz);
             b.vx = (b.tx - b.x) / tt;
+            const pw = b.spinPower >= 1.2 ? '強' : b.spinPower >= 0.85 ? '中' : '弱';
+            game.pops.push({ x: b.x, y: 0.5, z: b.z, text: `キュッ！ キレ${pw}`, t: 1.0, color: '#ffb03a' });
           } else {
             b.vy = -b.vy * 0.58; b.vz *= 0.9; b.vx *= 0.9;
           }
@@ -1061,7 +1093,10 @@
         b.x = clamp(b.x, -GOAL_HW + BALL_R, GOAL_HW - BALL_R);
       }
     }
-    b.spinAng += dt * (b.spin ? 30 : 12);
+    b.spinAng += dt * (b.spin ? 30 + 30 * (b.spinPower || 1) : 12);
+    // 軌跡
+    b.trail.push([b.x, b.y, b.z]);
+    if (b.trail.length > 28) b.trail.shift();
   }
 
   function resolveShot(kind) {
@@ -1142,8 +1177,8 @@
   const H = 640;
   let W = 960, overlayScale = 1;
   const RING = { x: 125, y: 510, r: 95, dead: 14 };
-  // 右端の列: 上 ジャンプ(ダッシュを2.5秒長押しすると自動でムササビに変わる。ずっと表示) / 下 ダッシュ(長押し)
-  // その内側(左)にシュートボタンのひし形: まん中 ノーマル / 上 ループ / 左 左スピン / 右 右スピン / 下 バウンド(地上で押すとステップシュート)
+  // 左端: 地上では 上 ジャンプ(ダッシュを2.5秒長押しすると自動でムササビに変わる) / 下 ダッシュ(長押し)。跳んだら方角リング(シュートのコース)に切り替わる
+  // 右端: シュートボタンのひし形: まん中 ノーマル / 上 ループ / 左 左スピン / 右 右スピン / 下 バウンド(地上で押すとステップシュート)
   // 位置は resize() で画面の幅に合わせて決める
   const BTN = {
     normal: { x: 785, y: 465, r: 50, key: 'U' },
@@ -1162,6 +1197,9 @@
     const r = canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
   }
+  // 跳んだら左端が方向キー(方角リング)になる。地上ではそこにジャンプとダッシュ
+  function ringMode() { return !!player && (player.state === 'air' || player.state === 'ground'); }
+  function buttonShown(name) { return name === 'jump' || name === 'dash' ? !ringMode() : true; }
   function buttonOn(name) {
     if (!player || game.phase !== 'play') return false;
     if (name === 'jump') return canJump();
@@ -1171,6 +1209,7 @@
   function hitButton(p) {
     let best = null, bd = Infinity;
     for (const name in BTN) {
+      if (!buttonShown(name)) continue;
       const b = BTN[name];
       const d = Math.hypot(p.x - b.x, p.y - b.y) - b.r;
       if (d < bd) { bd = d; best = name; }
@@ -1198,7 +1237,7 @@
     canvas.setPointerCapture(e.pointerId);
     const p = canvasPos(e);
     if (game.paused || game.phase === 'title' || game.phase === 'over') { pointers.set(e.pointerId, 'none'); return; }
-    if (Math.hypot(p.x - RING.x, p.y - RING.y) <= RING.r + 30) {
+    if (ringMode() && Math.hypot(p.x - RING.x, p.y - RING.y) <= RING.r + 30) {
       pointers.set(e.pointerId, 'ring');
       ringInput.active = true;
       setRing(p);
@@ -1209,6 +1248,9 @@
     pointers.set(e.pointerId, b || 'none');
   });
   canvas.addEventListener('pointermove', (e) => {
+    const v = pointers.get(e.pointerId);
+    // ジャンプ・ダッシュを押していた指は、跳んだらそのまま方向キーとして使える
+    if ((v === 'jump' || v === 'dash') && ringMode()) { pointers.set(e.pointerId, 'ring'); ringInput.active = true; }
     if (pointers.get(e.pointerId) === 'ring') setRing(canvasPos(e));
   });
   function releasePointer(e) {
@@ -1255,7 +1297,11 @@
 
   function drawControls() {
     if (!player || (game.phase !== 'play' && game.phase !== 'result')) return;
-    // 方角リング
+    // 方角リング(跳んでから)
+    if (ringMode()) drawRing();
+    drawButtons();
+  }
+  function drawRing() {
     ctx.save();
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1277,18 +1323,20 @@
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
-    const airAim = player.state !== 'run' && player.state !== 'pass';
-    ctx.fillText(airAim ? '高く' : '前・高く', RING.x, RING.y - RING.r - 6);
-    ctx.fillText(airAim ? '低く' : '後ろ・低く', RING.x, RING.y + RING.r + 15);
+    ctx.fillText('高く', RING.x, RING.y - RING.r - 6);
+    ctx.fillText('低く', RING.x, RING.y + RING.r + 15);
+    ctx.fillText('左', RING.x - RING.r - 12, RING.y + 4);
+    ctx.fillText('右', RING.x + RING.r + 12, RING.y + 4);
     const kx = RING.x + mx * RING.r * 0.6, ky = RING.y - my * RING.r * 0.6;
     ctx.fillStyle = mag > 0.1 ? '#ffe14d' : 'rgba(255,255,255,0.6)';
     ctx.beginPath(); ctx.arc(kx, ky, RING.r * 0.17, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-
-    // ボタン
+  }
+  function drawButtons() {
     ctx.save();
     const blink = Math.floor(game.time * 10) % 2 === 0;
     for (const name in BTN) {
+      if (!buttonShown(name)) continue;
       const b = BTN[name];
       const enabled = buttonOn(name);
       let held = false;
@@ -1361,6 +1409,34 @@
   // ゴールの狙い・キーパーの吹き出し・足あとの番号・ナビ
   function drawWorldMarks() {
     if (!player) return;
+    // ボールの軌跡(スピンはオレンジで太く)
+    if (ball && ball.trail.length > 1 && (ball.state === 'fly' || ball.t < 1.5)) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      const col = ball.spin ? '255,160,40' : '255,255,255';
+      for (let i = 1; i < ball.trail.length; i++) {
+        const a = Scene3D.project(...ball.trail[i - 1]), c = Scene3D.project(...ball.trail[i]);
+        if (a.behind || c.behind) continue;
+        const u = i / ball.trail.length;
+        ctx.strokeStyle = `rgba(${col},${(ball.spin ? 0.8 : 0.45) * u})`;
+        ctx.lineWidth = (ball.spin ? 7 : 4) * u;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // 浮かぶ文字
+    for (const pp of game.pops) {
+      pp.t -= 1 / 60;
+      const q = Scene3D.project(pp.x, pp.y + (1 - pp.t) * 0.6, pp.z);
+      if (q.behind || pp.t <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = clamp(pp.t * 2, 0, 1);
+      ctx.font = '900 24px sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.fillStyle = pp.color;
+      ctx.strokeText(pp.text, q.x, q.y); ctx.fillText(pp.text, q.x, q.y);
+      ctx.restore();
+    }
+    game.pops = game.pops.filter((pp) => pp.t > 0);
     // 足あとの番号
     ctx.textAlign = 'center';
     for (const f of footprints) {
@@ -1415,9 +1491,30 @@
     }
   }
 
+  // ダッシュ中: 画面の左右に流れる線
+  const speedLines = Array.from({ length: 26 }, () => ({ y: Math.random(), x: Math.random(), l: rand(60, 160), s: rand(1.6, 3) }));
+  function drawSpeedLines() {
+    const p = player;
+    if (!p || !(p.state === 'run' || p.state === 'pass') || !input.dash || game.phase !== 'play') return;
+    const k = clamp(((p.speed || 0) - JOG_SPEED) / (DASH_SPEED - JOG_SPEED), 0, 1);
+    if (k < 0.2) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const l of speedLines) {
+      l.x = (l.x + l.s * 0.016) % 1;
+      const side = l.y < 0.5 ? -1 : 1;
+      const yy = H * (0.15 + (l.y < 0.5 ? l.y : l.y - 0.5) * 1.5);
+      const xx = side < 0 ? (1 - l.x) * W * 0.22 : W - (1 - l.x) * W * 0.22;
+      ctx.strokeStyle = `rgba(255,255,255,${0.35 * k * (1 - l.x)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + side * l.l * 0.5, yy); ctx.stroke();
+    }
+    ctx.restore();
+  }
   function drawOverlay() {
     ctx.setTransform(overlayScale, 0, 0, overlayScale, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    drawSpeedLines();
     drawWorldMarks();
     drawControls();
     if (game.paused) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H); }
@@ -1533,7 +1630,10 @@
     return o;
   }
   function renderScene(dt) {
+    // ダッシュ中は画角を少し広げてスピード感を出す
+    const dashK = player && (player.state === 'run' || player.state === 'pass') ? clamp(((player.speed || 0) - JOG_SPEED) / (DASH_SPEED - JOG_SPEED), 0, 1) : 0;
     Scene3D.render({
+      fov: 46 + dashK * 7,
       cam,
       player: player && { j: worldJoints(player), heading: player.heading, x: player.x, z: player.z, y: player.y, musa: player.musasabi && player.state !== 'run', lean: player.lean },
       keeper: keeper && { j: keeperJoints(keeper), x: keeper.x, z: keeper.z, f: keeper.f },
@@ -1554,14 +1654,15 @@
     W = Math.round(H * r.width / r.height);
     // スマホは指で押しやすいよう大きく。ただし横幅の狭い画面(4:3 など)は方角リングとぶつからないよう小さい配置
     if (isTouch) Object.assign(RING, { x: 168, y: 478, r: 122, dead: 16 });
+    // 左端: 地上ではジャンプ(上)とダッシュ(下)、跳んだら方角リング。右端: シュートのひし形
     let layout;
-    if (isTouch && W >= 1150) {
-      const jx = W - 110, cx = W - 400;
-      layout = [['jump', jx, 405, 70], ['dash', jx, 562, 64],
+    if (isTouch) {
+      const cx = W - 215;
+      layout = [['jump', 168, 395, 72], ['dash', 168, 560, 70],
         ['loop', cx, 290, 60], ['spinL', cx - 145, 430, 60], ['spinR', cx + 145, 430, 60], ['normal', cx, 430, 64], ['bound', cx, 570, 60]];
     } else {
-      const jx = W - 82, cx = W - 300;
-      layout = [['jump', jx, 440, 54], ['dash', jx, 568, 50],
+      const cx = W - 165;
+      layout = [['jump', 125, 440, 56], ['dash', 125, 565, 52],
         ['loop', cx, 360, 46], ['spinL', cx - 105, 465, 46], ['spinR', cx + 105, 465, 46], ['normal', cx, 465, 50], ['bound', cx, 570, 46]];
     }
     for (const [k, x, y, rr] of layout) Object.assign(BTN[k], { x, y, r: rr });
