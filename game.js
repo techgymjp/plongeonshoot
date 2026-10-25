@@ -1014,16 +1014,16 @@
   const H = 640;
   let W = 960, overlayScale = 1;
   const RING = { x: 125, y: 510, r: 95, dead: 14 };
-  // 右側のボタン(ひし形): 上 ループ / 左 左スピン / 右 右スピン / まん中 バウンド / 下 ダッシュ(長押し)
-  // その左の列: 上 ノーマル / 下 ジャンプ(ダッシュ中の3歩目だけ自動でムササビに変わる。ずっと表示)
+  // 右側のボタン(ひし形): 上 ノーマル / 左 左スピン / 右 右スピン / まん中 バウンド / 下 ダッシュ(長押し)。ノーマルのさらに上にループ
+  // その左: ジャンプ(ダッシュ中の3歩目だけ自動でムササビに変わる。ずっと表示)
   // シュートボタンは地上で押すとステップシュート
   const BTN = {
     bound: { x: 785, y: 465, r: 50, key: 'K' },
-    loop: { x: 785, y: 360, r: 46, key: 'I' },
+    normal: { x: 785, y: 360, r: 46, key: 'U' },
+    loop: { x: 785, y: 262, r: 42, key: 'I' },
     spinL: { x: 680, y: 465, r: 46, key: 'J' },
     spinR: { x: 890, y: 465, r: 46, key: 'L' },
     dash: { x: 785, y: 570, r: 48, key: 'Shift' },
-    normal: { x: 560, y: 420, r: 46, key: 'U' },
     jump: { x: 560, y: 540, r: 54, key: 'Space' },
   };
   const BTN_SUB = { loop: '高く山なり', normal: '速いシュート', spinL: '左へ切れる', spinR: '右へ切れる', bound: '足元を抜く' };
@@ -1414,10 +1414,10 @@
     if (isTouch) {
       Object.assign(RING, { x: 168, y: 478, r: 122, dead: 16 });
       const cx = W - 232;
-      for (const [k, x, y, rr] of [['loop', cx, 285, 60], ['spinL', cx - 145, 425, 60], ['spinR', cx + 145, 425, 60], ['bound', cx, 425, 62], ['dash', cx, 562, 58], ['normal', cx - 315, 370, 58], ['jump', cx - 315, 525, 70]]) Object.assign(BTN[k], { x, y, r: rr });
+      for (const [k, x, y, rr] of [['loop', cx, 160, 54], ['normal', cx, 290, 60], ['spinL', cx - 145, 425, 60], ['spinR', cx + 145, 425, 60], ['bound', cx, 425, 62], ['dash', cx, 562, 58], ['jump', cx - 315, 525, 70]]) Object.assign(BTN[k], { x, y, r: rr });
     } else {
       const cx = W - 175;
-      BTN.bound.x = BTN.loop.x = BTN.dash.x = cx; BTN.spinL.x = cx - 105; BTN.spinR.x = cx + 105; BTN.normal.x = BTN.jump.x = cx - 225;
+      BTN.bound.x = BTN.normal.x = BTN.loop.x = BTN.dash.x = cx; BTN.spinL.x = cx - 105; BTN.spinR.x = cx + 105; BTN.jump.x = cx - 225;
     }
     overlayScale = (r.height / H) * dpr;
     canvas.width = Math.round(W * overlayScale);
