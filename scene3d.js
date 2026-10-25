@@ -458,8 +458,10 @@ window.Scene3D = (() => {
       placeSeg(r['knee' + s], mid(j['hi' + s], j['kn' + s], 0.85), mid(j['kn' + s], j['ft' + s], 0.15), 0.135, 0.15);
       // 靴: 足首から体の前方向へ
       const f = j['ft' + s];
-      r['shoe' + s].position.set(f[0] + (r.frontPlusZ ? 0 : -Math.sin(-heading) * 0.06), Math.max(0.05, f[1] - 0.02), f[2] + (r.frontPlusZ ? 0.06 : -Math.cos(heading) * 0.06));
-      r['shoe' + s].rotation.set(0, r.frontPlusZ ? 0 : -heading, 0);
+      // 靴はつま先を体の正面へ(キーパーは +z が正面で heading だけ回す)
+      const fx = Math.sin(heading) * 0.06, fz = (r.frontPlusZ ? 1 : -1) * Math.cos(heading) * 0.06;
+      r['shoe' + s].position.set(f[0] + fx, Math.max(0.05, f[1] - 0.02), f[2] + fz);
+      r['shoe' + s].rotation.set(0, r.frontPlusZ ? heading : -heading, 0);
       r['shoe' + s].scale.set(0.13, 0.1, 0.27);
       placeSeg(r['upArm' + s], j['sh' + s], j['el' + s], 0.13, 0.14, 0.03);
       placeSeg(r['fore' + s], j['el' + s], j['ha' + s], 0.1, 0.11);
@@ -610,7 +612,7 @@ window.Scene3D = (() => {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x10121a);
     scene.fog = new THREE.Fog(0x161925, 45, 110);
-    camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 300);
+    camera = new THREE.PerspectiveCamera(46, W / H, 0.1, 300); // 縦の画角。広すぎるとゴールが遠く見える
     glowTex = glowTexture();
 
     // 室内の照明: 天井からの光が中心
@@ -663,7 +665,7 @@ window.Scene3D = (() => {
     if (!ready) return;
     updateScreen(v.st);
     poseRig(rigs.player, v.player && v.player.j, v.player ? v.player.heading : 0);
-    poseRig(rigs.keeper, v.keeper && v.keeper.j, 0);
+    poseRig(rigs.keeper, v.keeper && v.keeper.j, v.keeper ? v.keeper.f : 0);
     poseRig(rigs.mate, v.mate && v.mate.j, v.mate ? v.mate.heading : 0);
     if (v.mate) { rigs.mate.shadow.position.set(v.mate.x, 0.02, v.mate.z); rigs.mate.shadow.scale.set(0.9, 0.9, 1); }
     if (v.player) {
@@ -675,6 +677,7 @@ window.Scene3D = (() => {
     if (v.keeper) {
       rigs.keeper.shadow.position.set(v.keeper.x, 0.021, v.keeper.z);
       rigs.keeper.shadow.scale.set(1.3, 0.8, 1);
+      rigs.keeper.shadow.rotation.z = v.keeper.f || 0;
     }
     updateMembrane(v.player && v.player.j, v.player && v.player.musa);
     // ボール

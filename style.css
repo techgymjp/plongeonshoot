@@ -76,6 +76,8 @@ html, body {
   background: rgba(5, 10, 25, .72); padding: 16px; overflow-y: auto;
 }
 .overlay.show { display: flex; }
+/* 結果画面は20本ぶん並ぶので広め */
+#result .panel { max-width: 720px; }
 .panel {
   background: linear-gradient(#1c2a4a, #121a30); border: 2px solid rgba(255, 255, 255, .15);
   border-radius: 18px; padding: 18px 20px; max-width: 560px; width: 100%; text-align: center; margin: auto;
@@ -99,7 +101,12 @@ html, body {
 .big-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #a65400; }
 #rank { font-size: 72px; font-weight: 900; color: #ffd84a; line-height: 1.1; }
 #finalScore { font-size: 20px; margin-bottom: 4px; }
-#history { text-align: left; font-size: 14px; line-height: 1.7; margin: 0 auto 14px; max-width: 360px; }
+#history {
+  text-align: left; font-size: 12px; line-height: 1.6; margin: 0 auto 14px; max-width: 640px;
+  list-style: none; padding: 0; columns: 2; column-gap: 18px;
+}
+#history li { break-inside: avoid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#history li span { display: inline-block; width: 2.2em; color: #aab; }
 #history .g { color: #ffd84a; }
 #history .x { color: #ff8a8a; }
 
@@ -119,7 +126,7 @@ html, body {
   .hint, .keys { font-size: 11px; margin: 3px 0; }
   .big-btn { padding: 8px 36px; font-size: 18px; }
   #rank { font-size: 48px; }
-  #history { font-size: 12px; line-height: 1.5; }
+  #history { font-size: 11px; line-height: 1.4; }
   .hud-box { font-size: 12px; padding: 3px 8px; }
   .hud-box b { font-size: 15px; }
 }
