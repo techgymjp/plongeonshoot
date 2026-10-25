@@ -1,6 +1,7 @@
 'use strict';
 // ムササビシュート — ゲームの進行・選手とキーパーの動き・ボールの物理・入力・2D の表示(方角リング・ボタン)
-//   1. 左サイドで走りながら味方のパス(直接・バウンド・山なり)を受ける。受けたら右(ゴール中央の方)へ切れ込みながら1歩ずつ進む
+//   1. 画面右のサイド(右コーナー・定位置・サイドライン沿い)で走りながら味方のパス(直接・バウンド・山なり)を受ける。
+//      受けたら左(ゴール中央の方)へ切れ込みながら1歩ずつ進む
 //   2. ダッシュを長押ししたまま3歩目(左足)を踏んだときだけ「ジャンプ」が「ムササビ」に変わる。4歩目・6mラインを踏む・シュート前の着地は失敗
 //      ムササビ(プロンジョンシュート)はコート中央側へ跳び込み、滞空の後半で体を大きく倒して角度を広げる
 //   3. 着地するまでに ノーマル(まん中) / ループ(上) / 左スピン(左) / 右スピン(右) / バウンド(下) でシュート。
@@ -25,10 +26,17 @@
   const TOTAL_SHOTS = 5;
   const DT = 1 / 120;
 
-  // 左サイド。毎回この範囲で少しずつ変わる
-  const START = { x: [-9.8, -9.1], z: [5.2, 7.2] };
-  // 右へ切れ込む先
-  const CUT_TO = { x: 0.6, z: 7.6 };
+  // 開始位置(画面右のサイド。右利きがプロンジョンを使う側)。毎回どれかを選び、範囲の中で少しずつ変わる
+  //   サイドはゴール左右のコーナー寄りに位置取り、ボールが来る前に走り出して、走り込みながら受ける
+  //   path: 走るコース(順に向かう点)。最後は中央へ寄って角度を作る。mate: パスを出す味方の位置
+  const START_SPOTS = [
+    { name: '右コーナーから', x: [8.6, 9.5], z: [1.4, 2.8], path: [[6.8, 5.4], [1.0, 7.4]],
+      mate: { x: [3.6, 5.4], z: [9.8, 11.2] }, hint: 'ゴールライン際から上がって受ける。角度がないので早めに跳ぼう' },
+    { name: 'サイドの定位置から', x: [9.0, 9.7], z: [5.0, 7.0], path: [[-0.6, 7.6]],
+      mate: { x: [3.6, 5.6], z: [10.2, 11.6] }, hint: '中央へ切れ込んで受ける' },
+    { name: 'サイドライン沿いに走り込んで', x: [9.0, 9.6], z: [10.5, 12.5], path: [[8.6, 7.6], [-0.6, 7.2]],
+      mate: { x: [1.0, 3.0], z: [12.5, 14.0] }, hint: 'サイドラインに沿って走り、曲線を描いてセンターへ寄る' },
+  ];
 
   const SHOT_TYPES = {
     normal: { name: 'ノーマル', pts: 100 },
@@ -69,8 +77,8 @@
   // ナビ: キーパーの決め打ちに効くシュート(ボタン名とコース)
   const COUNTER = {
     star: { btn: 'bound', jx: 0.8, jy: -0.8 }, low: { btn: 'loop', jx: 0.7, jy: 0.8 },
-    diveL: { btn: 'spinR', jx: 0.9, jy: 0.3 }, diveR: { btn: 'spinL', jx: -0.9, jy: 0.3 },
-    out: { btn: 'loop', jx: 0.5, jy: 0.8 }, spread: { btn: 'bound', jx: 0.3, jy: -0.8 },
+    diveL: { btn: 'normal', jx: 0.9, jy: 0.5 }, diveR: { btn: 'normal', jx: -0.9, jy: 0.5 },
+    out: { btn: 'loop', jx: 0.5, jy: 0.8 }, spread: { btn: 'loop', jx: 0.6, jy: 0.8 },
   };
 
   // ================= ユーティリティ =================
@@ -419,29 +427,31 @@
 
   function newAttempt() {
     game.shotNo++;
-    const x = rand(START.x[0], START.x[1]), z = rand(START.z[0], START.z[1]);
-    const base = Math.atan2(CUT_TO.x - x, -(CUT_TO.z - z)); // 進む向き: (sin a, -cos a)
+    const spot = pick(START_SPOTS);
+    const x = rand(spot.x[0], spot.x[1]), z = rand(spot.z[0], spot.z[1]);
+    const path = spot.path.map(([px, pz]) => [px + rand(-0.4, 0.4), pz + rand(-0.4, 0.4)]);
+    const base = Math.atan2(path[0][0] - x, -(path[0][1] - z)); // 進む向き: (sin a, -cos a)
     player = {
-      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, state: 'pass', steps: 0, stepT: 0, lean: 0, side: 1,
+      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, path, spot, state: 'pass', steps: 0, stepT: 0, lean: 0, side: 1,
       musasabi: false, shot: false, airT: 0, shotT: 0, groundT: 0, animPh: 0, slide: false,
       j: copyPose(runPose(0)),
     };
     const kt = pick(KEEPER_TYPES);
     keeper = {
-      type: kt, x: -0.6, z: kt.z, baseZ: kt.z, stance: kt.move === 'restless' ? 'high' : 'ready',
+      type: kt, x: 0.6, z: kt.z, baseZ: kt.z, stance: kt.move === 'restless' ? 'high' : 'ready',
       committed: null, commitAt: Infinity, label: '', labelT: 0, reactAt: Infinity, react: null,
       speed: kt.speed, t: 0, j: copyPose(KP.ready), hopT: 0, hopX: 0, feintT: rand(0.3, 0.6), feintX: 0, result: null, resultT: 0,
     };
     ball = null; footprints = [];
     hintBtn = null; jumpHint = false;
     // 左バックの味方からパス。直接・バウンド・山なりのどれか
-    const mx = rand(-5.6, -3.6), mz = rand(10.2, 11.6);
+    const mx = rand(spot.mate.x[0], spot.mate.x[1]), mz = rand(spot.mate.z[0], spot.mate.z[1]);
     mate = { x: mx, z: mz, y: 0, heading: Math.atan2(x - mx, -(z - mz)), j: copyPose(standPose()), t: -rand(0.05, 0.2) };
     const ptype = pick(Object.keys(PASS_TYPES));
     pass = { type: ptype, T: PASS_TYPES[ptype].T, t: 0, released: false, from: null, pos: null };
     game.phase = 'play';
     game.lineFlash = 0;
-    showMsg(PASS_TYPES[ptype].name, `左サイドで受けて右へ切れ込め ／ GK：${kt.name}`, 'info', 1.4);
+    showMsg(PASS_TYPES[ptype].name, `${spot.name} ／ GK：${kt.name}`, 'info', 1.6);
     updateHud();
   }
 
@@ -525,7 +535,7 @@
     const aGoal = Math.atan2(-p.x, p.z);
     if (musa) {
       // ムササビ(プロンジョン): ゴールではなくコート中央側へ跳び込んで角度を広げる。体はゴールに向ける
-      const fly = Math.atan2(1.6 - p.x, -(3.6 - p.z));
+      const fly = Math.atan2(-1.6 - p.x, -(Math.min(3.6, p.z - 0.6) - p.z));
       const sp = DASH_SPEED * 0.88;
       p.vx = sp * Math.sin(fly); p.vz = -sp * Math.cos(fly);
       p.heading = aGoal;
@@ -564,7 +574,7 @@
     const sx = hw[0], sy = hw[1], sz = Math.max(hw[2], 0.6);
     const dist = Math.hypot(sx, sz);
     // コースのばらつき
-    let sig = { step: 0.2, quick: 0.18, jump: 0.13, fall: 0.17, musasabi: 0.12 }[timing];
+    let sig = { step: 0.2, quick: 0.18, jump: 0.13, fall: 0.17, musasabi: 0.085 }[timing];
     sig *= clamp(dist / 7, 0.6, 1.6);
     // ゴールが見える角度が狭いほど(サイドの奥ほど)ぶれる。中央へ跳び込むと角度が広がる
     const view = Math.abs(Math.atan2(GOAL_HW - sx, sz) - Math.atan2(-GOAL_HW - sx, sz));
@@ -616,7 +626,14 @@
   }
 
   // 画面基準の方向(方角リング)をワールドの向きへ
+  // 走るコースに沿って向きを決める(次の点に近づいたら次へ)
+  function updateBase(p) {
+    if (p.path.length > 1 && Math.hypot(p.path[0][0] - p.x, p.path[0][1] - p.z) < 1.3) p.path.shift();
+    const t = p.path[0];
+    p.base = Math.atan2(t[0] - p.x, -(t[1] - p.z));
+  }
   function steerHeading(p) {
+    updateBase(p);
     const m = Math.hypot(input.jx, input.jy);
     if (m < 0.15) return p.base;
     const fx = cam.lx - cam.x, fz = cam.lz - cam.z, fl = Math.hypot(fx, fz) || 1;
@@ -686,7 +703,7 @@
       }
       p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
       if (p.z < keeper.z + 0.9) { p.z = keeper.z + 0.9; p.vz = 0; }
-      p.x = Math.min(p.x, 3);
+      p.x = Math.max(p.x, -3);
       if (p.musasabi) {
         // まず高く跳んでキーパーを見る。滞空の後半で体を大きく広げて倒す
         p.lean = Math.max(p.lean, clamp((p.airT - 0.45) / 0.7, 0, 1));
@@ -805,7 +822,7 @@
       if (k.resultT > 1.2 && k.stance.startsWith('dive')) k.stance = k.result === 'save' ? 'cheer' : 'sad';
       speed = 1.2; tx = k.x;
     } else if (!k.committed || k.committed === 'wait') {
-      // 角度を消す位置取り(左サイドからだとニア=左ポスト側)
+      // 角度を消す位置取り(画面右のサイドからだとニア=右ポスト側)
       tx = sx * (k.z / (sz + k.z)) * 1.4 + Math.sign(sx) * k.type.bias * clamp(Math.abs(sx) / 4, 0, 1);
       const m = k.type.move;
       if (m === 'sway') tx += Math.sin(k.t * 3.2) * 0.45;
@@ -986,13 +1003,13 @@
   }
 
   // ================= カメラ =================
-  const cam = { x: -14, y: 3, z: 12, lx: 0, ly: 1, lz: 0, init: false };
+  const cam = { x: 14, y: 3, z: 12, lx: 0, ly: 1, lz: 0, init: false };
   function updateCamera(dt) {
     let tx, ty, tz, lx, ly, lz;
     if (!player) {
-      // タイトル: 左サイドからゴールを眺める
-      tx = -10 + Math.sin(game.time * 0.15) * 2; ty = 3.4; tz = 10.5;
-      lx = -1; ly = 1.2; lz = 1;
+      // タイトル: 右サイドからゴールを眺める
+      tx = 10 + Math.sin(game.time * 0.15) * 2; ty = 3.4; tz = 10.5;
+      lx = 1; ly = 1.2; lz = 1;
     } else {
       const p = player;
       const fx = ball && ball.state === 'fly' ? (p.x + ball.x) / 2 : p.x;
@@ -1014,17 +1031,16 @@
   const H = 640;
   let W = 960, overlayScale = 1;
   const RING = { x: 125, y: 510, r: 95, dead: 14 };
-  // 右側のボタン(ひし形): 上 ノーマル / 左 左スピン / 右 右スピン / まん中 バウンド / 下 ダッシュ(長押し)。ノーマルのさらに上にループ
-  // その左: ジャンプ(ダッシュ中の3歩目だけ自動でムササビに変わる。ずっと表示)
-  // シュートボタンは地上で押すとステップシュート
+  // 右側のシュートボタン(ひし形): まん中 ノーマル / 上 ループ / 左 左スピン / 右 右スピン / 下 バウンド(地上で押すとステップシュート)
+  // その左の列: 上 ジャンプ(ダッシュ中の3歩目だけ自動でムササビに変わる。ずっと表示) / 下 ダッシュ(長押し)
   const BTN = {
-    bound: { x: 785, y: 465, r: 50, key: 'K' },
-    normal: { x: 785, y: 360, r: 46, key: 'U' },
-    loop: { x: 785, y: 262, r: 42, key: 'I' },
+    normal: { x: 785, y: 465, r: 50, key: 'U' },
+    loop: { x: 785, y: 360, r: 46, key: 'I' },
     spinL: { x: 680, y: 465, r: 46, key: 'J' },
     spinR: { x: 890, y: 465, r: 46, key: 'L' },
-    dash: { x: 785, y: 570, r: 48, key: 'Shift' },
-    jump: { x: 560, y: 540, r: 54, key: 'Space' },
+    bound: { x: 785, y: 570, r: 46, key: 'K' },
+    jump: { x: 560, y: 440, r: 54, key: 'Space' },
+    dash: { x: 560, y: 568, r: 50, key: 'Shift' },
   };
   const BTN_SUB = { loop: '高く山なり', normal: '速いシュート', spinL: '左へ切れる', spinR: '右へ切れる', bound: '足元を抜く' };
   const pointers = new Map(); // pointerId -> 'ring' | ボタンの名前 | 'none'
@@ -1414,10 +1430,10 @@
     if (isTouch) {
       Object.assign(RING, { x: 168, y: 478, r: 122, dead: 16 });
       const cx = W - 232;
-      for (const [k, x, y, rr] of [['loop', cx, 160, 54], ['normal', cx, 290, 60], ['spinL', cx - 145, 425, 60], ['spinR', cx + 145, 425, 60], ['bound', cx, 425, 62], ['dash', cx, 562, 58], ['jump', cx - 315, 525, 70]]) Object.assign(BTN[k], { x, y, r: rr });
+      for (const [k, x, y, rr] of [['loop', cx, 290, 60], ['spinL', cx - 145, 430, 60], ['spinR', cx + 145, 430, 60], ['normal', cx, 430, 64], ['bound', cx, 570, 60], ['jump', cx - 320, 405, 70], ['dash', cx - 320, 562, 64]]) Object.assign(BTN[k], { x, y, r: rr });
     } else {
       const cx = W - 175;
-      BTN.bound.x = BTN.normal.x = BTN.loop.x = BTN.dash.x = cx; BTN.spinL.x = cx - 105; BTN.spinR.x = cx + 105; BTN.jump.x = cx - 225;
+      BTN.normal.x = BTN.loop.x = BTN.bound.x = cx; BTN.spinL.x = cx - 105; BTN.spinR.x = cx + 105; BTN.jump.x = BTN.dash.x = cx - 225;
     }
     overlayScale = (r.height / H) * dpr;
     canvas.width = Math.round(W * overlayScale);

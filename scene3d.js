@@ -191,7 +191,9 @@ window.Scene3D = (() => {
     const boardMat = new THREE.MeshBasicMaterial({ map: boardTexture(), side: THREE.DoubleSide });
     const bm = (len) => { const m = boardMat.clone(); m.map = boardMat.map.clone(); m.map.needsUpdate = true; m.map.repeat.set(len / 20, 1); return m; };
     quad([-14, 0, -4.5], [14, 0, -4.5], [14, 0.9, -4.5], [-14, 0.9, -4.5], bm(28));
-    for (const s of [-1, 1]) quad([s * 13, 0, -4.5], [s * 13, 0, 44], [s * 13, 0.9, 44], [s * 13, 0.9, -4.5], bm(48));
+    // 両サイドの看板(コートの内側から見て文字が正しい向きになるよう、左右で頂点の順を変える)
+    quad([13, 0, -4.5], [13, 0, 44], [13, 0.9, 44], [13, 0.9, -4.5], bm(48));
+    quad([-13, 0, 44], [-13, 0, -4.5], [-13, 0.9, -4.5], [-13, 0.9, 44], bm(48));
 
     // スタンド(ゴール裏と両サイド。室内なので近くて急)
     const mkCrowd = (rep) => {
@@ -374,6 +376,7 @@ window.Scene3D = (() => {
   };
   const Y = new THREE.Vector3(0, 1, 0);
   const tv1 = new THREE.Vector3(), tv2 = new THREE.Vector3(), tv3 = new THREE.Vector3(), tm = new THREE.Matrix4();
+  const headUp = new THREE.Vector3();
 
   // 関節の位置から体を組み立てる人形。frontPlusZ: 胸が +z 側(キーパー)
   function makeRig(team, num, frontPlusZ, hairCol, skinCol) {
@@ -441,13 +444,14 @@ window.Scene3D = (() => {
     r.shorts.quaternion.copy(r.torso.quaternion);
     r.shorts.position.set(hipP[0] - up.x * 0.06, hipP[1] - up.y * 0.06, hipP[2] - up.z * 0.06);
     r.shorts.scale.set(sw + 0.08, 0.2, 0.27);
+    // up / right / z は placeSeg が作業用ベクトルを書き換える前に控えておく
+    headUp.copy(up);
     placeSeg(r.neck, neckP, mid(neckP, j.head, 0.6), 0.12, 0.12);
     r.head.position.set(j.head[0], j.head[1], j.head[2]);
     r.head.quaternion.copy(r.torso.quaternion);
-    r.hair.position.set(j.head[0] + up.x * 0.02, j.head[1] + up.y * 0.02, j.head[2] + up.z * 0.02);
+    // 髪: 頭の真上にかぶせる(少しだけ上にずらす)
+    r.hair.position.set(j.head[0] + headUp.x * 0.015, j.head[1] + headUp.y * 0.015, j.head[2] + headUp.z * 0.015);
     r.hair.quaternion.copy(r.torso.quaternion);
-    // 後頭部を髪で覆う(顔の向きに合わせて少し傾ける)
-    r.hair.rotateX(r.frontPlusZ ? -0.35 : 0.35);
     for (const s of ['L', 'R']) {
       placeSeg(r['thigh' + s], j['hi' + s], j['kn' + s], 0.17, 0.19, 0.04);
       placeSeg(r['shin' + s], j['kn' + s], j['ft' + s], 0.14, 0.16);
