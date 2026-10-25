@@ -1,5 +1,6 @@
 'use strict';
 // ムササビシュート — ゲームの進行・選手とキーパーの動き・ボールの物理・入力・2D の表示(方角リング・ボタン)
+//   0. 構えて待ち、レフリーのホイッスルでパスが始まる
 //   1. 画面右のサイド(右コーナー・定位置・サイドライン沿い)で走りながら味方のパス(直接・バウンド・山なり)を受ける。
 //      受けたら左(ゴール中央の方)へ切れ込みながら1歩ずつ進む
 //   2. ダッシュを長押ししたまま3歩目(左足)を踏んだときだけ「ジャンプ」が「ムササビ」に変わる。4歩目・6mラインを踏む・シュート前の着地は失敗
@@ -24,6 +25,7 @@
   const STEP_INTERVAL = 0.36;   // 歩数の基準
   const JOG_STEP = 0.42, DASH_STEP = 0.32;  // 1歩の間隔 (秒)
   const TOTAL_SHOTS = 5;
+  const READY_T = 1.4;          // ホイッスルまでの間 (秒)
   const DT = 1 / 120;
 
   // 開始位置(画面右のサイド。右利きがプロンジョンを使う側)。毎回どれかを選び、範囲の中で少しずつ変わる
@@ -166,15 +168,18 @@
     net() { burst(0.45, 0.25, 'highpass', 3000, 0.5); },
     save() { tone('sine', 110, 45, 0.18, 0.5); burst(0.08, 0.3, 'lowpass', 700); },
     post() { [520, 1240, 2090, 2900].forEach((f, i) => tone('sine', f, f * 0.98, 0.8, 0.12 / (i + 1))); },
-    whistle() {
+    // レフリーの笛。反則は長く「ピーッ」、開始の合図は短く鋭く「ピッ！」
+    whistle(hold = 0.45, vol = 0.15) {
       if (!AC || muted) return;
       const t = AC.currentTime;
       const o = AC.createOscillator(), lfo = AC.createOscillator(), lg = AC.createGain(), g = AC.createGain();
       o.type = 'sine'; o.frequency.value = 2900; lfo.frequency.value = 28; lg.gain.value = 120;
       lfo.connect(lg).connect(o.frequency);
-      env(g, t, 0.02, 0.15, 0.45, 0.1);
-      o.connect(g).connect(master); o.start(t); lfo.start(t); o.stop(t + 0.7); lfo.stop(t + 0.7);
+      env(g, t, 0.01, vol, hold, 0.08);
+      o.connect(g).connect(master); o.start(t); lfo.start(t); o.stop(t + hold + 0.2); lfo.stop(t + hold + 0.2);
+      burst(0.05, vol * 0.8, 'bandpass', 3200, 2); // 吹き始めの息の音
     },
+    startWhistle() { sfx.whistle(0.16, 0.2); },
     cheer(power = 1) {
       if (!AC || muted) return;
       const t = AC.currentTime;
@@ -432,7 +437,7 @@
     const path = spot.path.map(([px, pz]) => [px + rand(-0.4, 0.4), pz + rand(-0.4, 0.4)]);
     const base = Math.atan2(path[0][0] - x, -(path[0][1] - z)); // 進む向き: (sin a, -cos a)
     player = {
-      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, path, spot, state: 'pass', steps: 0, stepT: 0, lean: 0, side: 1,
+      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, path, spot, state: 'ready', readyT: READY_T, steps: 0, stepT: 0, lean: 0, side: 1,
       musasabi: false, shot: false, airT: 0, shotT: 0, groundT: 0, animPh: 0, slide: false,
       j: copyPose(runPose(0)),
     };
@@ -451,7 +456,8 @@
     pass = { type: ptype, T: PASS_TYPES[ptype].T, t: 0, released: false, from: null, pos: null };
     game.phase = 'play';
     game.lineFlash = 0;
-    showMsg(PASS_TYPES[ptype].name, `${spot.name} ／ GK：${kt.name}`, 'info', 1.6);
+    // 構えて待つ → ホイッスル → パス
+    showMsg(`${game.shotNo}本目`, `${spot.name} ／ GK：${kt.name}`, 'info', READY_T - 0.1);
     updateHud();
   }
 
@@ -647,7 +653,18 @@
   function updatePlayer(dt) {
     const p = player;
     let target;
-    if (p.state === 'pass') {
+    if (p.state === 'ready') {
+      // ホイッスルを待つ。体を少し沈めて構える
+      p.readyT -= dt;
+      p.heading = p.base;
+      target = standPose();
+      target.hip[1] -= 0.06; target.knL[2] -= 0.08; target.knR[2] -= 0.08;
+      if (p.readyT <= 0) {
+        p.state = 'pass';
+        sfx.startWhistle();
+        showMsg('ピッ！', `${PASS_TYPES[pass.type].name}が来るぞ`, 'info', 0.9);
+      }
+    } else if (p.state === 'pass') {
       // パスを受けるまで少し走る(歩数はまだ数えない)
       const h = steerHeading(p);
       p.heading += clamp(angDiff(h, p.heading), -3.2 * dt, 3.2 * dt);
@@ -742,7 +759,7 @@
 
   // パス: 味方が投げて、走っている選手の手に届く
   function updatePass(dt) {
-    mate.t += dt;
+    if (player.state !== 'ready') mate.t += dt;
     const p = player;
     if (!pass.released && mate.t >= 0.2) {
       pass.released = true;
@@ -1019,7 +1036,9 @@
       tx = (dx / dl) * dist; tz = (dz / dl) * dist;
       const high = p.state === 'air' || p.state === 'ground' ? (p.musasabi ? 1.6 : 0.8) : 0;
       ty = 2.6 + high + p.y * 0.3;
-      lx = p.x * 0.35; ly = 1.0 - high * 0.15; lz = 1.0;
+      // 構えている間・パスを受けるまでは選手の方を少し多めに見る(コーナーで選手が画面の端に寄らないよう)
+      const lead = p.state === 'ready' || p.state === 'pass' ? 0.6 : 0.35;
+      lx = p.x * lead; ly = 1.0 - high * 0.15; lz = 1.0 + (lead - 0.35) * 2;
     }
     const a = cam.init ? 1 - Math.exp(-4 * dt) : 1;
     cam.init = true;
@@ -1387,7 +1406,7 @@
   function heldBall() {
     if (ball) return { x: ball.x, y: ball.y, z: ball.z, spin: ball.spinAng };
     if (!player) return null;
-    if (player.state === 'pass') {
+    if (player.state === 'pass' || player.state === 'ready') {
       if (pass.pos) return { x: pass.pos[0], y: pass.pos[1], z: pass.pos[2], spin: pass.t * 15 };
       const w = jointWorld(mate, 'haR');
       return { x: w[0], y: w[1] + 0.07, z: w[2], spin: 0 };
