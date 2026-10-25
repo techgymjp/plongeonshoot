@@ -1,25 +1,40 @@
 'use strict';
+// ムササビシュート — ゲームの進行・選手とキーパーの動き・ボールの物理・入力・2D の表示(方角リング・ボタン)
+//   1. 左サイドで走りながら味方のパス(直接・バウンド・山なり)を受ける。受けたら右(ゴール中央の方)へ切れ込みながら1歩ずつ進む
+//   2. ダッシュを長押ししたまま3歩目(左足)を踏んだときだけ「ジャンプ」が「ムササビ」に変わる。4歩目・6mラインを踏む・シュート前の着地は失敗
+//      ムササビ(プロンジョンシュート)はコート中央側へ跳び込み、滞空の後半で体を大きく倒して角度を広げる
+//   3. 着地するまでに ノーマル(まん中) / ループ(上) / 左スピン(左) / 右スピン(右) / バウンド(下) でシュート。
+//      方角リングでコース(左右・高低)を決める
+// 操作系(方角リング・ひし形のボタン・ナビ・一時停止)はセンターフライ/ジャッカル/コーナーキックと同じ作り。
 (() => {
   const $ = (s) => document.querySelector(s);
   const canvas = $('#game');
   const ctx = canvas.getContext('2d');
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
 
   // ================= 定数 =================
   const GOAL_HW = 1.5;          // ゴール半幅 (m)
   const GOAL_H = 2.0;           // ゴール高さ
   const AREA_R = 6;             // 6mライン
-  const FREE_R = 9;             // 9mライン
   const G = 9.8;
   const BALL_R = 0.095;
   const RUN_SPEED = 3.2;
-  const STEP_INTERVAL = 0.36;   // 1歩の間隔 (秒)
+  const JOG_SPEED = 2.3, DASH_SPEED = 3.3;  // ふつう / ダッシュ長押し (m/s)
+  const STEP_INTERVAL = 0.36;   // 歩数の基準
+  const JOG_STEP = 0.42, DASH_STEP = 0.32;  // 1歩の間隔 (秒)
   const TOTAL_SHOTS = 5;
-  const NEAR = 0.3;
+  const DT = 1 / 120;
+
+  // 左サイド。毎回この範囲で少しずつ変わる
+  const START = { x: [-9.8, -9.1], z: [5.2, 7.2] };
+  // 右へ切れ込む先
+  const CUT_TO = { x: 0.6, z: 7.6 };
 
   const SHOT_TYPES = {
     normal: { name: 'ノーマル', pts: 100 },
     loop: { name: 'ループ', pts: 150 },
-    spin: { name: 'スピン', pts: 180 },
+    spinL: { name: '左スピン', pts: 180 },
+    spinR: { name: '右スピン', pts: 180 },
     bound: { name: 'バウンド', pts: 130 },
   };
   // タイミングによるシュートの種類
@@ -30,33 +45,32 @@
     fall: { name: '倒れ込み', mult: 1.1 },
     musasabi: { name: 'ムササビ', mult: 2.0 },
   };
-  // 開始地点（パスを受ける位置）
-  const START_SPOTS = [
-    { name: 'センター', x: [-1.2, 1.2], z: [10.3, 11.2] },
-    { name: '左45度', x: [-5.2, -3.8], z: [9.4, 10.2] },
-    { name: '右45度', x: [3.8, 5.2], z: [9.4, 10.2] },
-    { name: '左サイド', x: [-9.2, -8.5], z: [6.6, 7.4] },
-    { name: '右サイド', x: [8.5, 9.2], z: [6.6, 7.4] },
-    { name: 'ロング', x: [-2.5, 2.5], z: [12.0, 12.8] },
-  ];
-  // キーパーのタイプ
+  // キーパーのタイプ(立つ位置・動き方・決め打ちのくせ)
   const KEEPER_TYPES = [
-    { name: '定位置でじっくり型', z: 0.55, move: 'track', bias: 0, react: 0.2, speed: 3.0,
-      commit: { star: 1, low: 1, diveL: 0.6, diveR: 0.6, out: 0.4, wait: 1.2 } },
-    { name: '前に飛び出す型', z: 1.2, move: 'advance', bias: 0.1, react: 0.18, speed: 3.2,
-      commit: { star: 1.2, low: 0.4, diveL: 0.5, diveR: 0.5, out: 1.6, wait: 0.3 } },
-    { name: 'ニアを固める型', z: 0.6, move: 'track', bias: 0.45, react: 0.22, speed: 2.8,
-      commit: { star: 0.6, low: 0.8, diveL: 1, diveR: 1, out: 0.5, wait: 0.6 } },
+    { name: '定位置でじっくり型', z: 0.55, move: 'track', bias: 0.1, react: 0.2, speed: 3.0,
+      commit: { star: 1, low: 1, diveL: 0.6, diveR: 0.6, out: 0.4, spread: 0.6, wait: 1.2 } },
+    { name: '飛び出し型', z: 0.9, move: 'rush', bias: 0.2, react: 0.18, speed: 3.2,
+      commit: { star: 1.0, low: 0.4, diveL: 0.4, diveR: 0.4, out: 1.8, spread: 0.8, wait: 0.2 } },
+    { name: 'ニアを固める型', z: 0.6, move: 'track', bias: 0.5, react: 0.22, speed: 2.8,
+      commit: { star: 0.6, low: 0.8, diveL: 1.4, diveR: 0.6, out: 0.5, spread: 0.6, wait: 0.6 } },
     { name: '左右に揺さぶる型', z: 0.7, move: 'sway', bias: 0, react: 0.24, speed: 3.4,
-      commit: { star: 0.8, low: 0.8, diveL: 1.3, diveR: 1.3, out: 0.4, wait: 0.3 } },
-    { name: 'ゴールライン型', z: 0.3, move: 'restless', bias: -0.15, react: 0.16, speed: 3.0,
-      commit: { star: 1.4, low: 1.2, diveL: 0.5, diveR: 0.5, out: 0.3, wait: 0.5 } },
-    { name: '大の字ジャンプ型', z: 0.8, move: 'track', bias: 0.1, react: 0.2, speed: 2.8,
-      commit: { star: 2.6, low: 0.3, diveL: 0.4, diveR: 0.4, out: 0.6, wait: 0.2 } },
+      commit: { star: 0.8, low: 0.8, diveL: 1.3, diveR: 1.3, out: 0.4, spread: 0.5, wait: 0.3 } },
+    { name: 'フェイント型', z: 0.65, move: 'feint', bias: 0.1, react: 0.2, speed: 3.6,
+      commit: { star: 0.7, low: 0.9, diveL: 1.1, diveR: 1.1, out: 0.5, spread: 0.9, wait: 0.4 } },
+    { name: 'ゴールライン型', z: 0.3, move: 'restless', bias: -0.1, react: 0.16, speed: 3.0,
+      commit: { star: 1.4, low: 1.2, diveL: 0.5, diveR: 0.5, out: 0.3, spread: 0.8, wait: 0.5 } },
+    { name: '大の字ジャンプ型', z: 0.8, move: 'advance', bias: 0.1, react: 0.2, speed: 2.8,
+      commit: { star: 2.6, low: 0.3, diveL: 0.4, diveR: 0.4, out: 0.6, spread: 0.6, wait: 0.2 } },
   ];
   const COMMIT_LABEL = {
     star: '大の字ジャンプ！', low: 'しゃがんだ！', diveL: '左に倒れた！', diveR: '右に倒れた！',
-    out: '前に出てきた！', wait: 'じっと待っている…',
+    out: '前に出てきた！', spread: '両手を広げた！', wait: 'じっと待っている…',
+  };
+  // ナビ: キーパーの決め打ちに効くシュート(ボタン名とコース)
+  const COUNTER = {
+    star: { btn: 'bound', jx: 0.8, jy: -0.8 }, low: { btn: 'loop', jx: 0.7, jy: 0.8 },
+    diveL: { btn: 'spinR', jx: 0.9, jy: 0.3 }, diveR: { btn: 'spinL', jx: -0.9, jy: 0.3 },
+    out: { btn: 'loop', jx: 0.5, jy: 0.8 }, spread: { btn: 'bound', jx: 0.3, jy: -0.8 },
   };
 
   // ================= ユーティリティ =================
@@ -64,6 +78,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   function gauss() {
     let u = 0, v = 0;
     while (!u) u = Math.random();
@@ -88,73 +103,8 @@
     const t = clamp(((px - ax) * vx + (py - ay) * vy) / l2, 0, 1);
     return Math.hypot(px - (ax + vx * t), py - (ay + vy * t));
   }
-
-  // ================= 画面 =================
-  let W = 0, H = 0, F = 600, CY = 0;
-  function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = canvas.clientWidth; H = canvas.clientHeight;
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    F = Math.min(H * 1.05, W * 1.5);
-    CY = H * 0.36;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // ================= カメラ =================
-  const cam = { x: 0, y: 2.5, z: 14, fx: 0, fz: -1, pitch: 0.16 };
-  function toCam(x, y, z) {
-    const dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
-    const h = dx * cam.fx + dz * cam.fz;
-    const side = dx * -cam.fz + dz * cam.fx;
-    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-    return { s: side, u: dy * cp + h * sp, d: h * cp - dy * sp };
-  }
-  function camToScreen(c) {
-    const k = F / c.d;
-    return { x: W / 2 + c.s * k, y: CY - c.u * k, k };
-  }
-  function proj(x, y, z) {
-    const c = toCam(x, y, z);
-    if (c.d < NEAR) return null;
-    return camToScreen(c);
-  }
-  // 近クリップ付きポリゴン
-  function polyPath(pts3) {
-    const cs = pts3.map((p) => toCam(p[0], p[1], p[2]));
-    const out = [];
-    for (let i = 0; i < cs.length; i++) {
-      const a = cs[i], b = cs[(i + 1) % cs.length];
-      const ain = a.d >= NEAR, bin = b.d >= NEAR;
-      if (ain) out.push(a);
-      if (ain !== bin) {
-        const t = (NEAR - a.d) / (b.d - a.d);
-        out.push({ s: lerp(a.s, b.s, t), u: lerp(a.u, b.u, t), d: NEAR });
-      }
-    }
-    if (out.length < 3) return false;
-    ctx.beginPath();
-    out.forEach((c, i) => {
-      const p = camToScreen(c);
-      if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
-    });
-    ctx.closePath();
-    return true;
-  }
-  function line3(a, b, width, color) {
-    let ca = toCam(a[0], a[1], a[2]), cb = toCam(b[0], b[1], b[2]);
-    if (ca.d < NEAR && cb.d < NEAR) return;
-    if (ca.d < NEAR || cb.d < NEAR) {
-      const t = (NEAR - ca.d) / (cb.d - ca.d);
-      const m = { s: lerp(ca.s, cb.s, t), u: lerp(ca.u, cb.u, t), d: NEAR + 1e-3 };
-      if (ca.d < NEAR) ca = m; else cb = m;
-    }
-    const pa = camToScreen(ca), pb = camToScreen(cb);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, width * (pa.k + pb.k) / 2);
-    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
-  }
+  function loadNum(key, def) { try { const v = localStorage.getItem(key); return v == null ? def : JSON.parse(v); } catch (e) { return def; } }
+  function saveNum(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* 保存できない環境 */ } }
 
   // ================= サウンド（ホーンなし・歓声のみ） =================
   let AC = null, master = null, noiseBuf = null, muted = false, murmurGain = null;
@@ -382,71 +332,166 @@
     for (const k of JOINTS) for (let i = 0; i < 3; i++) cur[k][i] = lerp(cur[k][i], target[k][i], a);
   }
 
+  // ---- 追加のポーズ ----
+  KP.spread = (() => {
+    const p = JSON.parse(JSON.stringify(KP.ready));
+    p.elL = [-0.6, 1.42, 0.05]; p.haL = [-1.0, 1.35, 0.1]; p.elR = [0.6, 1.42, 0.05]; p.haR = [1.0, 1.35, 0.1];
+    p.knL = [-0.42, 0.48, 0.05]; p.knR = [0.42, 0.48, 0.05]; p.ftL = [-0.62, 0.04, 0]; p.ftR = [0.62, 0.04, 0];
+    p.hip = [0, 0.9, 0]; return p;
+  })();
+  KP.cheer = (() => {
+    const p = JSON.parse(JSON.stringify(KP.ready));
+    p.elL = [-0.32, 1.85, 0.05]; p.haL = [-0.42, 2.2, 0.05]; p.elR = [0.32, 1.85, 0.05]; p.haR = [0.42, 2.2, 0.05];
+    p.knL = [-0.18, 0.5, 0.03]; p.knR = [0.18, 0.5, 0.03]; p.ftL = [-0.22, 0.04, 0]; p.ftR = [0.22, 0.04, 0];
+    return p;
+  })();
+  KP.sad = (() => {
+    const p = JSON.parse(JSON.stringify(KP.ready));
+    p.head = [0, 1.55, 0.18]; p.neck = [0, 1.43, 0.1]; p.shL = [-0.2, 1.38, 0.06]; p.shR = [0.2, 1.38, 0.06];
+    p.elL = [-0.28, 1.12, 0.08]; p.haL = [-0.3, 0.85, 0.1]; p.elR = [0.28, 1.12, 0.08]; p.haR = [0.3, 0.85, 0.1];
+    p.knL = [-0.15, 0.5, 0.03]; p.knR = [0.15, 0.5, 0.03]; p.ftL = [-0.2, 0.04, 0]; p.ftR = [0.2, 0.04, 0];
+    return p;
+  })();
+  // ムササビ(プロンジョン): 両手両足を広げ、ボールは頭の近くに構える
+  function spreadPose() {
+    return {
+      head: [0, 1.76, -0.04], neck: [0, 1.53, -0.02], hip: [0, 1.0, 0.02], shL: [-0.21, 1.48, 0], shR: [0.21, 1.48, 0],
+      elL: [-0.55, 1.5, -0.08], haL: [-0.9, 1.45, -0.15], elR: [0.4, 1.78, 0.1], haR: [0.36, 2.06, 0.22],
+      hiL: [-0.12, 1.0, 0], hiR: [0.12, 1.0, 0], knL: [-0.32, 0.6, 0.05], ftL: [-0.55, 0.25, 0.1],
+      knR: [0.2, 0.58, 0.08], ftR: [0.3, 0.22, 0.25],
+    };
+  }
+  function spreadThrowPose() {
+    const p = spreadPose(); p.elR = [0.32, 1.66, -0.28]; p.haR = [0.26, 1.58, -0.66]; p.head = [0, 1.74, -0.14]; return p;
+  }
+  // 体を倒す: roll = 横(+ で右へ)、pitch = 前へ。腰の高さを軸に回す
+  function tiltPose(src, roll, pitch) {
+    const o = {}, cr = Math.cos(roll), sr = Math.sin(roll), cq = Math.cos(pitch), sq = Math.sin(pitch);
+    for (const k of JOINTS) {
+      const [x, y, z] = src[k], y0 = y - 1.0;
+      const x1 = x * cr + y0 * sr, y1 = -x * sr + y0 * cr;
+      const z2 = z * cq - y1 * sq, y2 = z * sq + y1 * cq;
+      o[k] = [x1, y2 + 1.0, z2];
+    }
+    return o;
+  }
+  function catchPose(ph) {
+    const p = runPose(ph, false);
+    p.elL = [-0.25, 1.35, -0.3]; p.haL = [-0.15, 1.45, -0.5]; p.elR = [0.25, 1.35, -0.3]; p.haR = [0.15, 1.45, -0.5];
+    return p;
+  }
+  // 味方(パスを出す)
+  function passerPose(t) {
+    const p = standPose();
+    p.haR = [0.32, 1.35, 0.05]; p.elR = [0.3, 1.15, 0.05];
+    if (t > 0 && t < 0.2) { const k = t / 0.2; p.elR = [0.4, 1.6, 0.15 * k]; p.haR = [0.35, 1.6 + 0.35 * k, 0.3 * k]; }
+    else if (t >= 0.2 && t < 0.7) { p.elR = [0.3, 1.55, -0.3]; p.haR = [0.25, 1.4, -0.65]; }
+    return p;
+  }
+
+  function celebratePose(t) {
+    const p = standPose();
+    p.elL = [-0.3, 1.8, 0]; p.haL = [-0.38, 2.15, -0.05]; p.elR = [0.3, 1.8, 0]; p.haR = [0.38, 2.15, -0.05];
+    const b = Math.abs(Math.sin(t * 7)) * 0.15;
+    for (const k of JOINTS) p[k][1] += b;
+    return p;
+  }
+  function sadPose() {
+    const p = standPose();
+    p.head = [0, 1.55, -0.2]; p.neck = [0, 1.43, -0.12]; p.haL = [-0.28, 0.85, -0.1]; p.haR = [0.28, 0.85, -0.1];
+    p.elL = [-0.27, 1.12, -0.06]; p.elR = [0.27, 1.12, -0.06];
+    return p;
+  }
+
   // ================= ゲーム状態 =================
   const game = {
     phase: 'title', score: 0, shotNo: 0, goals: 0, combo: 0, history: [], waitT: 0, time: 0,
+    paused: false, slowT: 0, lineFlash: 0, nav: loadNum('musasabi.nav', true), best: loadNum('musasabi.best', 0),
   };
-  const input = { jx: 0, jy: 0, keys: {} };
-  let player, keeper, ball, footprints = [], confetti = [], crowd = [], cheer = 0, aimMark = null;
-
-  // 観客
-  (function makeCrowd() {
-    const cols = ['#e74c3c', '#f1c40f', '#3498db', '#ecf0f1', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#fd79a8'];
-    for (let r = 0; r < 9; r++) {
-      for (let i = 0; i < 46; i++) {
-        crowd.push({
-          x: -17 + i * 0.75 + rand(-0.15, 0.15) + (r % 2) * 0.37, row: r,
-          y: 1.3 + r * 0.55, z: -8 - r * 0.7, c: pick(cols), ph: rand(0, 6.28), h: rand(0.9, 1.1),
-        });
-      }
-    }
-  })();
+  const input = { jx: 0, jy: 0, dash: false, keys: new Set() };
+  let player = null, keeper = null, ball = null, footprints = [], cheer = 0, hintBtn = null, jumpHint = false;
+  let mate = null, pass = null;
+  const PASS_TYPES = {
+    direct: { name: '直接パス', T: 0.5 },
+    bounce: { name: 'バウンドパス', T: 0.62 },
+    lob: { name: '山なりパス', T: 0.85 },
+  };
 
   function newAttempt() {
     game.shotNo++;
-    const spot = pick(START_SPOTS);
-    const x = rand(spot.x[0], spot.x[1]), z = rand(spot.z[0], spot.z[1]);
-    const base = Math.atan2(-x, z); // ゴール中央へ向かう角度
+    const x = rand(START.x[0], START.x[1]), z = rand(START.z[0], START.z[1]);
+    const base = Math.atan2(CUT_TO.x - x, -(CUT_TO.z - z)); // 進む向き: (sin a, -cos a)
     player = {
-      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, state: 'run', steps: 0, stepT: 0,
-      spot: spot.name, musasabi: false, shot: false, airT: 0, shotT: 0, animPh: 0, slide: false, j: copyPose(runPose(0)),
+      x, z, y: 0, vx: 0, vy: 0, vz: 0, base, heading: base, state: 'pass', steps: 0, stepT: 0, lean: 0, side: 1,
+      musasabi: false, shot: false, airT: 0, shotT: 0, groundT: 0, animPh: 0, slide: false,
+      j: copyPose(runPose(0)),
     };
     const kt = pick(KEEPER_TYPES);
     keeper = {
-      type: kt, x: clamp(x * 0.1, -0.6, 0.6), z: kt.z, baseZ: kt.z, stance: kt.move === 'restless' ? 'high' : 'ready',
+      type: kt, x: -0.6, z: kt.z, baseZ: kt.z, stance: kt.move === 'restless' ? 'high' : 'ready',
       committed: null, commitAt: Infinity, label: '', labelT: 0, reactAt: Infinity, react: null,
-      speed: kt.speed, t: 0, j: copyPose(KP.ready), hopT: 0, hopX: 0,
+      speed: kt.speed, t: 0, j: copyPose(KP.ready), hopT: 0, hopX: 0, feintT: rand(0.3, 0.6), feintX: 0, result: null, resultT: 0,
     };
-    ball = null; aimMark = null; footprints = [];
-    input.jx = 0; input.jy = 0; updateKnob();
+    ball = null; footprints = [];
+    hintBtn = null; jumpHint = false;
+    // 左バックの味方からパス。直接・バウンド・山なりのどれか
+    const mx = rand(-5.6, -3.6), mz = rand(10.2, 11.6);
+    mate = { x: mx, z: mz, y: 0, heading: Math.atan2(x - mx, -(z - mz)), j: copyPose(standPose()), t: -rand(0.05, 0.2) };
+    const ptype = pick(Object.keys(PASS_TYPES));
+    pass = { type: ptype, T: PASS_TYPES[ptype].T, t: 0, released: false, from: null, pos: null };
     game.phase = 'play';
-    sfx.catch();
-    showMsg('キャッチ！', `${spot.name}から ／ GK：${kt.name}`, 'info', 1.3);
+    game.lineFlash = 0;
+    showMsg(PASS_TYPES[ptype].name, `左サイドで受けて右へ切れ込め ／ GK：${kt.name}`, 'info', 1.4);
     updateHud();
   }
 
   function startGame() {
     initAudio();
+    goLandscape();
     game.score = 0; game.shotNo = 0; game.goals = 0; game.combo = 0; game.history = [];
+    game.paused = false; game.newRecord = false;
     $('#title').classList.remove('show');
     $('#result').classList.remove('show');
+    $('#pause').classList.remove('show');
+    Scene3D.clearConfetti();
     newAttempt();
+  }
+
+  function goTitle() {
+    game.phase = 'title'; game.paused = false;
+    player = null; keeper = null; ball = null; mate = null; pass = null;
+    $('#result').classList.remove('show');
+    $('#pause').classList.remove('show');
+    $('#title').classList.add('show');
+    $('#titleBest').textContent = game.best;
+  }
+
+  // スマホは全画面・横向きに(対応しているブラウザだけ)
+  function goLandscape() {
+    if (!isTouch) return;
+    const el = document.documentElement;
+    try {
+      const p = el.requestFullscreen ? el.requestFullscreen() : null;
+      if (p && p.then) p.then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {})).catch(() => {});
+    } catch (e) { /* 非対応 */ }
   }
 
   function endGame() {
     game.phase = 'over';
     const s = game.score;
     const rank = s >= 1700 ? 'S' : s >= 1100 ? 'A' : s >= 600 ? 'B' : s >= 250 ? 'C' : 'D';
+    if (s > game.best) { game.best = s; saveNum('musasabi.best', s); game.newRecord = true; }
     $('#rank').textContent = rank;
-    $('#finalScore').textContent = `${s} 点 ／ ${game.goals} / ${TOTAL_SHOTS} ゴール`;
+    $('#finalScore').textContent = `${s} 点 ／ ${game.goals} / ${TOTAL_SHOTS} ゴール（${game.nav ? 'ナビあり' : 'ナビなし'}）`;
+    $('#newRecord').textContent = game.newRecord ? 'ベスト記録更新！' : `ベスト ${game.best} 点`;
     $('#history').innerHTML = game.history.map((h) => `<li class="${h.ok ? 'g' : 'x'}">${h.text}</li>`).join('');
     $('#result').classList.add('show');
-    if (game.goals >= 3) { launchConfetti(1.5); sfx.cheer(1.2); }
+    if (game.goals >= 3) { Scene3D.confetti(1.6); sfx.cheer(1.2); cheer = 1; }
   }
 
   function finishAttempt(ok, text) {
     game.phase = 'result';
-    game.waitT = ok ? 3.0 : 2.4;
+    game.waitT = ok ? 3.2 : 2.6;
     game.history.push({ ok, text });
     updateHud();
   }
@@ -457,26 +502,46 @@
     showMsg(title, sub, 'fail', 2.2);
     game.combo = 0;
     if (player.state === 'run') player.state = 'stop';
+    keeper.result = 'foul';
     finishAttempt(false, `失敗：${title}`);
     $('#steps').classList.add('foul');
   }
 
-  // ================= 入力 =================
-  function canJump() { return game.phase === 'play' && player.state === 'run'; }
-  function canMusa() { return canJump() && player.steps === 3; }
+  // ================= 入力の判定 =================
+  function canJump() { return game.phase === 'play' && player && player.state === 'run'; }
+  // ダッシュを押したまま3歩目を踏んだときだけムササビになる
+  function canMusa() { return canJump() && player.steps === 3 && input.dash; }
   function canShoot() {
-    return game.phase === 'play' && !player.shot && (player.state === 'run' || player.state === 'air');
+    return game.phase === 'play' && player && !player.shot && (player.state === 'run' || player.state === 'air');
   }
+
+  // ジャンプボタン: ふだんはジャンプ、ダッシュ中の3歩目だけムササビ
+  function pressJump() { if (canMusa()) doJump(true); else doJump(false); }
 
   function doJump(musa) {
     if (!canJump() || (musa && !canMusa())) return;
-    player.state = 'air'; player.musasabi = musa; player.airT = 0;
+    const p = player;
+    p.state = 'air'; p.musasabi = musa; p.airT = 0; p.lean = 0;
+    const aGoal = Math.atan2(-p.x, p.z);
     if (musa) {
-      player.vy = 4.0; player.vx *= 0.82; player.vz *= 0.82;
+      // ムササビ(プロンジョン): ゴールではなくコート中央側へ跳び込んで角度を広げる。体はゴールに向ける
+      const fly = Math.atan2(1.6 - p.x, -(3.6 - p.z));
+      const sp = DASH_SPEED * 0.88;
+      p.vx = sp * Math.sin(fly); p.vz = -sp * Math.cos(fly);
+      p.heading = aGoal;
+      p.side = Math.sign(Math.sin(fly - aGoal)) || 1;
+    } else {
+      // 普通のジャンプ: 走ってきた向きからゴールの方へ
+      p.heading = p.heading + angDiff(aGoal, p.heading) * 0.6;
+      const sp = (p.speed || JOG_SPEED) * 0.9;
+      p.vx = sp * Math.sin(p.heading); p.vz = -sp * Math.cos(p.heading);
+    }
+    if (musa) {
+      p.vy = 4.0;
       showMsg('ムササビ！', '長い滞空時間でキーパーの動きを見極めろ', 'musa', 1.0);
       keeper.commitAt = rand(0.45, 1.15);
     } else {
-      player.vy = 4.4; player.vx *= 0.9; player.vz *= 0.9;
+      p.vy = 4.4;
       keeper.commitAt = rand(0.4, 0.85);
     }
     sfx.jump();
@@ -499,37 +564,41 @@
     const sx = hw[0], sy = hw[1], sz = Math.max(hw[2], 0.6);
     const dist = Math.hypot(sx, sz);
     // コースのばらつき
-    let sig = { step: 0.2, quick: 0.18, jump: 0.13, fall: 0.17, musasabi: 0.1 }[timing];
+    let sig = { step: 0.2, quick: 0.18, jump: 0.13, fall: 0.17, musasabi: 0.12 }[timing];
     sig *= clamp(dist / 7, 0.6, 1.6);
-    if (type === 'loop' || type === 'spin') sig *= 1.15;
+    // ゴールが見える角度が狭いほど(サイドの奥ほど)ぶれる。中央へ跳び込むと角度が広がる
+    const view = Math.abs(Math.atan2(GOAL_HW - sx, sz) - Math.atan2(-GOAL_HW - sx, sz));
+    sig *= clamp(Math.pow(0.42 / Math.max(0.05, view), 0.8), 0.75, 2.4);
+    const spinDir = type === 'spinL' ? -1 : type === 'spinR' ? 1 : 0;
+    if (type === 'loop' || spinDir) sig *= 1.15;
     let tx = input.jx * 1.3 + gauss() * sig;
     let ty = 1.0 + input.jy * 0.78 + gauss() * sig * 0.7;
+    // 体を倒すほど上のコースは打ちにくい
+    if (player.musasabi) ty = Math.min(ty, 1.95 - player.lean * 0.75 + gauss() * 0.05);
     const b = { x: sx, y: sy, z: sz, vx: 0, vy: 0, vz: 0, type, timing, state: 'fly', bounced: false,
-      passedKeeper: false, t: 0, trail: [], spin: 0, tx, ty };
+      passedKeeper: false, t: 0, trail: [], spin: spinDir, tx, ty, spinAng: 0 };
     if (type === 'normal') {
-      const T = dist / (timing === 'step' ? 17 : 16);
-      setVel(b, tx, ty, 0, T);
+      setVel(b, tx, ty, 0, dist / (timing === 'step' ? 17 : 16));
     } else if (type === 'loop') {
-      ty = clamp(1.55 + input.jy * 0.25 + gauss() * 0.08, 1.2, 2.0);
-      const T = 0.5 + dist * 0.075;
-      setVel(b, tx, ty, 0, T);
+      ty = clamp(1.55 + input.jy * 0.25 + gauss() * 0.08, 1.2, 2.0 - (player.musasabi ? player.lean * 0.45 : 0));
+      setVel(b, tx, ty, 0, 0.5 + dist * 0.075);
     } else {
-      // バウンド・スピン：床に一度当てる
+      // バウンド・スピン: 床に一度当てる
       const zb = clamp(sz * 0.32, 1.1, 2.4);
       const s = (sz - zb) / sz;
       let fakeX = tx;
-      if (type === 'spin') {
-        if (Math.abs(tx) < 0.35) tx = (Math.random() < 0.5 ? -1 : 1) * rand(0.6, 1.0);
-        fakeX = -tx * 0.8;
-        b.spin = Math.sign(tx);
+      if (spinDir) {
+        // 左スピンはバウンドしてから左へ、右スピンは右へ切れる。逆側を狙うように見せる
+        if (Math.abs(input.jx) < 0.2) tx = spinDir * rand(0.7, 1.05) + gauss() * sig * 0.5;
+        fakeX = clamp(tx - spinDir * 1.5, -1.7, 1.7);
       }
       const xb = sx + (fakeX - sx) * s;
-      const T1 = (dist * s) / (type === 'spin' ? 13 : 14.5);
-      setVel(b, xb, BALL_R, zb, T1);
-      b.tx = tx; b.ty = ty; b.zb = zb;
+      setVel(b, xb, BALL_R, zb, (dist * s) / (spinDir ? 13 : 14.5));
+      b.tx = tx; b.ty = ty;
     }
     ball = b;
     sfx.shot();
+    if (timing === 'musasabi') game.slowT = 0.55; // ムササビで打った瞬間はスローモーション
     keeperOnShot();
   }
 
@@ -539,107 +608,73 @@
     b.vy = (ty - b.y + 0.5 * G * T * T) / T;
   }
 
-  // ---- 方向カーソル（円） ----
-  const stick = $('#stick'), knob = $('#knob');
-  let stickId = null;
-  function stickFrom(e) {
-    const r = stick.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    let dx = (e.clientX - cx) / (r.width * 0.4), dy = -(e.clientY - cy) / (r.height * 0.4);
-    const m = Math.hypot(dx, dy);
-    if (m > 1) { dx /= m; dy /= m; }
-    input.jx = dx; input.jy = dy; updateKnob();
-  }
-  function updateKnob() {
-    const r = stick.offsetWidth * 0.33;
-    knob.style.transform = `translate(${input.jx * r}px, ${-input.jy * r}px)`;
-  }
-  stick.addEventListener('pointerdown', (e) => {
-    e.preventDefault(); initAudio(); stickId = e.pointerId; stick.setPointerCapture(e.pointerId); stickFrom(e);
-  });
-  stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) stickFrom(e); });
-  const stickUp = (e) => { if (e.pointerId === stickId) { stickId = null; input.jx = 0; input.jy = 0; updateKnob(); } };
-  stick.addEventListener('pointerup', stickUp);
-  stick.addEventListener('pointercancel', stickUp);
-
-  function bindBtn(el, fn) {
-    el.addEventListener('pointerdown', (e) => { e.preventDefault(); initAudio(); fn(); });
-  }
-  bindBtn($('#jumpBtn'), () => doJump(false));
-  bindBtn($('#musaBtn'), () => doJump(true));
-  document.querySelectorAll('#shotBtns button').forEach((b) => bindBtn(b, () => doShoot(b.dataset.shot)));
-  $('#startBtn').addEventListener('click', startGame);
-  $('#retryBtn').addEventListener('click', startGame);
-  $('#muteBtn').addEventListener('click', () => {
-    muted = !muted; $('#muteBtn').textContent = muted ? '🔇' : '🔊';
-    if (master) master.gain.value = muted ? 0 : 0.8;
-  });
-
-  const KEYMAP = { KeyZ: 'normal', KeyX: 'loop', KeyC: 'spin', KeyV: 'bound',
-    Digit1: 'normal', Digit2: 'loop', Digit3: 'spin', Digit4: 'bound' };
-  function keyStick() {
-    if (stickId !== null) return;
-    const k = input.keys;
-    let dx = (k.ArrowRight || k.KeyD ? 1 : 0) - (k.ArrowLeft || k.KeyA ? 1 : 0);
-    let dy = (k.ArrowUp || k.KeyW ? 1 : 0) - (k.ArrowDown || k.KeyS ? 1 : 0);
-    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
-    input.jx = dx; input.jy = dy; updateKnob();
-  }
-  window.addEventListener('keydown', (e) => {
-    if (e.repeat) return;
-    if ((game.phase === 'title' || game.phase === 'over') && (e.code === 'Enter' || e.code === 'Space')) {
-      e.preventDefault(); startGame(); return;
-    }
-    input.keys[e.code] = true;
-    if (/Arrow|Key[WASD]$/.test(e.code)) { e.preventDefault(); keyStick(); }
-    if (e.code === 'Space') { e.preventDefault(); doJump(false); }
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyM') doJump(true);
-    if (KEYMAP[e.code]) doShoot(KEYMAP[e.code]);
-  });
-  window.addEventListener('keyup', (e) => {
-    input.keys[e.code] = false;
-    if (/Arrow|Key[WASD]$/.test(e.code)) keyStick();
-  });
-
   // ================= 更新 =================
   function jointWorld(p, name) {
     const j = p.j[name];
-    // シューターは進行方向に合わせて回転させる
     const a = p.heading, c = Math.cos(a), s = Math.sin(a);
-    const lx = j[0], lz = j[2];
-    return [p.x + lx * c - lz * s, p.y + j[1], p.z + lx * s + lz * c];
+    return [p.x + j[0] * c - j[2] * s, p.y + j[1], p.z + j[0] * s + j[2] * c];
+  }
+
+  // 画面基準の方向(方角リング)をワールドの向きへ
+  function steerHeading(p) {
+    const m = Math.hypot(input.jx, input.jy);
+    if (m < 0.15) return p.base;
+    const fx = cam.lx - cam.x, fz = cam.lz - cam.z, fl = Math.hypot(fx, fz) || 1;
+    const nfx = fx / fl, nfz = fz / fl;            // 画面の奥
+    const rx = -nfz, rz = nfx;                     // 画面の右
+    const wx = input.jx * rx + input.jy * nfx, wz = input.jx * rz + input.jy * nfz;
+    const want = Math.atan2(wx, -wz);
+    return p.base + clamp(angDiff(want, p.base), -1.15, 1.15);
   }
 
   function updatePlayer(dt) {
     const p = player;
     let target;
-    if (p.state === 'run') {
-      const h = p.base + input.jx * 0.6;
-      p.heading = lerp(p.heading, h, 1 - Math.exp(-8 * dt));
-      p.vx = RUN_SPEED * Math.sin(p.heading);
-      p.vz = -RUN_SPEED * Math.cos(p.heading);
+    if (p.state === 'pass') {
+      // パスを受けるまで少し走る(歩数はまだ数えない)
+      const h = steerHeading(p);
+      p.heading += clamp(angDiff(h, p.heading), -3.2 * dt, 3.2 * dt);
+      const sp = input.dash ? JOG_SPEED : JOG_SPEED * 0.75; // 受けるまではゆっくり
+      p.speed = sp;
+      p.vx = sp * Math.sin(p.heading); p.vz = -sp * Math.cos(p.heading);
       p.x += p.vx * dt; p.z += p.vz * dt;
-      p.x = clamp(p.x, -9.6, 9.6);
+      p.animPh += dt * Math.PI / STEP_INTERVAL * 0.85;
+      target = pass.released && pass.t > pass.T - 0.25 ? catchPose(p.animPh) : runPose(p.animPh, false);
+    } else if (p.state === 'run') {
+      const h = steerHeading(p);
+      p.heading += clamp(angDiff(h, p.heading), -3.2 * dt, 3.2 * dt);
+      // ダッシュ長押しで速く・歩幅も大きく
+      const sp = input.dash ? DASH_SPEED : JOG_SPEED;
+      p.speed = lerp(p.speed || sp, sp, 1 - Math.exp(-6 * dt));
+      p.vx = p.speed * Math.sin(p.heading);
+      p.vz = -p.speed * Math.cos(p.heading);
+      p.x += p.vx * dt; p.z += p.vz * dt;
+      p.x = clamp(p.x, -9.7, 9.7);
+      const interval = input.dash ? DASH_STEP : JOG_STEP;
       if (game.phase === 'play') {
-        p.stepT += dt;
+        p.stepT += dt * STEP_INTERVAL / interval;
         if (p.stepT >= STEP_INTERVAL) {
           p.stepT -= STEP_INTERVAL;
           p.steps++;
           const side = p.steps % 2 ? -1 : 1;
           footprints.push({ x: p.x + Math.cos(p.heading) * 0.13 * side, z: p.z + Math.sin(p.heading) * 0.13 * side, n: p.steps, a: p.heading });
           sfx.squeak();
-          if (p.steps === 3) showMsg('3歩！', 'ムササビ チャンス！', 'musa', 0.6);
-          if (p.steps >= 4) { foul('オーバーステップ', '4歩目を踏んでしまった！'); }
+          if (p.steps === 3) showMsg('3歩！', input.dash ? '左足で踏み切ってムササビ！' : 'ダッシュしていないのでジャンプだけ', input.dash ? 'musa' : 'info', 0.6);
+          if (p.steps >= 4) foul('オーバーステップ', '4歩目を踏んでしまった！');
           updateHud();
         }
-        if (areaDist(p.x, p.z) < AREA_R) foul('ラインクロス', '6mラインを踏んでしまった！');
+        if (areaDist(p.x, p.z) < AREA_R) { game.lineFlash = 2; foul('ラインクロス', '6mラインを踏んでしまった！'); }
       }
       p.animPh = (p.steps + p.stepT / STEP_INTERVAL) * Math.PI;
       target = runPose(p.animPh, false);
+      if (p.steps === 3 && p.stepT < 0.12) { // 3歩目(左足)で踏み切りの構え
+        target = runPose(Math.PI * 1.5, true);
+      }
     } else if (p.state === 'stop') {
       p.vx *= Math.exp(-5 * dt); p.vz *= Math.exp(-5 * dt);
       p.x += p.vx * dt; p.z += p.vz * dt;
-      target = p.shot ? throwPose(standPose()) : standPose();
+      p.groundT += dt;
+      target = afterPose(p) || (p.shot ? throwPose(standPose()) : standPose());
     } else if (p.state === 'air') {
       p.airT += dt;
       let g = G;
@@ -651,34 +686,87 @@
       }
       p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
       if (p.z < keeper.z + 0.9) { p.z = keeper.z + 0.9; p.vz = 0; }
+      p.x = Math.min(p.x, 3);
       if (p.musasabi) {
-        const blendIn = clamp(p.airT / 0.3, 0, 1);
-        target = p.shot && p.shotT < 0.5 ? musaThrowPose() : musaPose();
-        if (blendIn < 1) {
-          const j = jumpPose(); for (const k of JOINTS) for (let i = 0; i < 3; i++) target[k][i] = lerp(j[k][i], target[k][i], blendIn);
-        }
+        // まず高く跳んでキーパーを見る。滞空の後半で体を大きく広げて倒す
+        p.lean = Math.max(p.lean, clamp((p.airT - 0.45) / 0.7, 0, 1));
+        let base = p.shot && p.shotT < 0.45 ? spreadThrowPose() : spreadPose();
+        const rise = clamp(p.airT / 0.25, 0, 1);
+        if (rise < 1) { const j = jumpPose(); for (const k of JOINTS) for (let i = 0; i < 3; i++) base[k][i] = lerp(j[k][i], base[k][i], rise); }
+        target = tiltPose(base, p.lean * 1.1 * p.side, p.lean * 0.4);
       } else {
         target = p.shot ? throwPose(jumpPose()) : jumpPose();
       }
-      if (p.y <= 0 && p.vy < 0) {
-        p.y = 0;
-        p.state = 'ground'; p.slide = p.musasabi;
+      // 着地: 体のどこか(ムササビは手足)が床に着いたら
+      if (p.vy < 0 && p.airT > 0.15 && (p.y <= 0 || lowestJoint(p) <= 0.03)) {
+        p.state = 'ground'; p.slide = p.musasabi; p.groundT = 0;
+        if (!p.musasabi) p.y = 0;
         if (!p.shot) foul('シュートできず', 'シュートする前に着地してしまった！');
         else sfx.bounce();
       }
     } else { // ground
+      p.groundT += dt;
       p.vx *= Math.exp(-(p.slide ? 2.5 : 7) * dt); p.vz *= Math.exp(-(p.slide ? 2.5 : 7) * dt);
       p.x += p.vx * dt; p.z += p.vz * dt;
       if (p.z < keeper.z + 0.9) { p.z = keeper.z + 0.9; p.vz = 0; }
-      target = p.slide ? slidePose(musaThrowPose()) : landPose();
+      // ムササビは手足で受けて背中の方へ転がる(受け身)
+      target = (!p.slide && afterPose(p)) || (p.slide ? tiltPose(spreadPose(), (1.1 + 0.5 * clamp(p.groundT / 0.5, 0, 1)) * p.side, 0.4 - 0.5 * clamp(p.groundT / 0.6, 0, 1)) : landPose());
     }
     if (p.shot) p.shotT += dt;
-    blendPose(p.j, target, 1 - Math.exp(-(p.state === 'run' ? 22 : 12) * dt));
+    blendPose(p.j, target, 1 - Math.exp(-(p.state === 'run' || p.state === 'pass' ? 22 : 12) * dt));
+    if (p.state === 'ground' && p.slide) p.y = Math.max(0, p.y - Math.max(0, lowestJoint(p) - 0.07) * Math.min(1, dt * 8) - 0.0);
+    if (p.state === 'ground' && p.slide) { const lo = lowestJoint(p); if (lo < 0.05) p.y += 0.05 - lo; else p.y -= Math.min(lo - 0.05, dt * 1.5); }
+  }
+  function lowestJoint(p) {
+    let m = Infinity;
+    for (const n of JOINTS) m = Math.min(m, p.y + p.j[n][1]);
+    return m;
+  }
+
+  // パス: 味方が投げて、走っている選手の手に届く
+  function updatePass(dt) {
+    mate.t += dt;
+    const p = player;
+    if (!pass.released && mate.t >= 0.2) {
+      pass.released = true;
+      pass.from = jointWorld(mate, 'haR');
+      pass.t = 0;
+      sfx.jump();
+    }
+    if (mate.t < 1.2) mate.heading += angDiff(Math.atan2(p.x - mate.x, -(p.z - mate.z)), mate.heading) * Math.min(1, dt * 6);
+    blendPose(mate.j, game.phase === 'result' && ball && ball.state === 'goal' ? celebratePose(game.time + 1) : passerPose(mate.t), 1 - Math.exp(-14 * dt));
+    if (!pass.released || p.state !== 'pass') return;
+    pass.t += dt;
+    const u = clamp(pass.t / pass.T, 0, 1);
+    const to = jointWorld(p, 'haR'), f = pass.from;
+    const x = lerp(f[0], to[0], u), z = lerp(f[2], to[2], u);
+    let y;
+    if (pass.type === 'direct') y = lerp(f[1], to[1], u) + Math.sin(Math.PI * u) * 0.35;
+    else if (pass.type === 'lob') y = lerp(f[1], to[1], u) + Math.sin(Math.PI * u) * 2.2;
+    else { // バウンド: 6割の所で床に一度つく
+      const ub = 0.58;
+      if (u < ub) { const k = u / ub; y = lerp(f[1], BALL_R, k) + Math.sin(Math.PI * k) * 0.15 * (1 - k); }
+      else { const k = (u - ub) / (1 - ub); y = lerp(BALL_R, to[1], k) + Math.sin(Math.PI * k) * 0.45; }
+      if (!pass.bounced && u >= ub) { pass.bounced = true; sfx.bounce(); }
+    }
+    pass.pos = [x, y, z];
+    if (u >= 1) { // キャッチ。ここから歩数を数える
+      p.state = 'run'; p.stepT = 0; p.steps = 0;
+      sfx.catch();
+      showMsg('キャッチ！', '3歩以内に跳べ', 'info', 0.7);
+    }
+  }
+
+  // 結果が出たあとの喜び・がっかり
+  function afterPose(p) {
+    if (game.phase !== 'result' || !ball || p.groundT < (p.slide ? 1.0 : 0.5)) return null;
+    if (ball.state === 'goal') return celebratePose(game.time);
+    return sadPose();
   }
 
   function keeperOnShot() {
     const k = keeper;
-    // 投げられた瞬間の軌道から読む（バウンドの変化は読めない）
+    // 投げられた瞬間の軌道から読む(バウンドの変化は読めない)
     const t = (ball.z - k.z) / Math.max(0.1, -ball.vz);
     let px = ball.x + ball.vx * t;
     let py = ball.y + ball.vy * t - 0.5 * G * t * t;
@@ -698,9 +786,9 @@
     k.committed = c;
     k.label = COMMIT_LABEL[c]; k.labelT = 1.6;
     if (c === 'wait') return;
-    if (c === 'diveL') { k.tx = k.x - 0.35; }
-    if (c === 'diveR') { k.tx = k.x + 0.35; }
-    if (c === 'out') { k.tz = Math.min(2.6, keeper.z + 1.4); }
+    if (c === 'diveL') k.tx = k.x - 0.35;
+    if (c === 'diveR') k.tx = k.x + 0.35;
+    if (c === 'out') k.tz = Math.min(2.6, keeper.z + 1.4);
     k.stance = c === 'out' ? 'ready' : c;
   }
 
@@ -710,15 +798,35 @@
     if (k.labelT > 0) k.labelT -= dt;
     let tx = k.x, tz = k.baseZ, speed = k.speed;
     const sx = ball ? ball.x : p.x, sz = Math.max(ball ? ball.z : p.z, 1);
-    if (!k.committed || k.committed === 'wait') {
-      // 角度を消す位置取り
+    if (k.result) {
+      // 結果のあと: セーブなら喜ぶ、決められたらうなだれる
+      k.resultT += dt;
+      if (k.resultT > 0.5) k.stance = k.result === 'save' ? 'cheer' : k.result === 'goal' && !k.stance.startsWith('dive') ? 'sad' : k.stance;
+      if (k.resultT > 1.2 && k.stance.startsWith('dive')) k.stance = k.result === 'save' ? 'cheer' : 'sad';
+      speed = 1.2; tx = k.x;
+    } else if (!k.committed || k.committed === 'wait') {
+      // 角度を消す位置取り(左サイドからだとニア=左ポスト側)
       tx = sx * (k.z / (sz + k.z)) * 1.4 + Math.sign(sx) * k.type.bias * clamp(Math.abs(sx) / 4, 0, 1);
       const m = k.type.move;
       if (m === 'sway') tx += Math.sin(k.t * 3.2) * 0.45;
       if (m === 'advance') tz = k.baseZ + clamp((11 - p.z) * 0.18, 0, 0.8);
+      if (m === 'rush') { // シューターに向かって飛び出し、角度を消す
+        const d = Math.hypot(p.x - k.x, p.z - k.z);
+        tz = k.baseZ + clamp((9.5 - d) * 0.4, 0, 1.7);
+        tx = clamp(p.x * 0.18, -1.3, 1.3);
+      }
+      if (m === 'feint') { // 片側に寄って見せてから戻る
+        k.feintT -= dt;
+        if (k.feintT <= 0) {
+          k.feintT = rand(0.45, 0.9);
+          k.feintX = k.feintX ? 0 : (Math.random() < 0.5 ? -0.6 : 0.6);
+          k.stance = k.feintX ? (k.feintX < 0 ? 'lowL' : 'lowR') : 'ready';
+        }
+        tx += k.feintX;
+      }
       if (m === 'restless') {
         k.hopT -= dt;
-        if (k.hopT <= 0) { k.hopT = rand(0.35, 0.7); k.hopX = rand(-0.4, 0.4); k.stance = pick(['ready', 'high', 'ready', 'lowL', 'lowR']); }
+        if (k.hopT <= 0) { k.hopT = rand(0.35, 0.7); k.hopX = rand(-0.4, 0.4); k.stance = pick(['ready', 'high', 'ready', 'lowL', 'lowR', 'spread']); }
         tx += k.hopX;
       }
       tx = clamp(tx, -1.1, 1.1);
@@ -728,7 +836,7 @@
       speed = k.committed.startsWith('dive') ? 3.5 : 2.5;
     }
     // シュートへの反応
-    if (k.react && k.t >= k.reactAt) {
+    if (!k.result && k.react && k.t >= k.reactAt) {
       const r = k.react;
       if (!k.committed || k.committed === 'wait' || k.committed === 'out') {
         const off = r.x - k.x;
@@ -746,16 +854,26 @@
         k.react = null; // 決め打ち中は動けない
       }
     }
-    if (k.committed === 'react') { tx = k.tx; speed = 4.2; }
+    if (!k.result && k.committed === 'react') { tx = k.tx; speed = 4.2; }
     tx = clamp(tx, -1.3, 1.3);
-    const dx = tx - k.x;
-    k.x += clamp(dx, -speed * dt, speed * dt);
-    const dz = tz - k.z;
-    k.z += clamp(dz, -2.6 * dt, 2.6 * dt);
-    // まだ跳んでいない／空中にいる間の決め打ち
-    if (p.state === 'air' && !p.shot && !k.committed && p.airT >= k.commitAt) keeperCommit();
+    k.x += clamp(tx - k.x, -speed * dt, speed * dt);
+    k.z += clamp(tz - k.z, -2.6 * dt, 2.6 * dt);
+    // 空中にいる間の決め打ち
+    if (!k.result && p.state === 'air' && !p.shot && !k.committed && p.airT >= k.commitAt) keeperCommit();
+    // 構えの手を小さく揺らす
+    const tgt = KP[k.stance];
+    let pose = tgt;
+    if (k.stance === 'ready' || k.stance === 'high' || k.stance === 'spread' || k.stance === 'cheer') {
+      pose = copyPose(tgt);
+      const bob = k.stance === 'cheer' ? Math.abs(Math.sin(k.t * 8)) * 0.18 : 0;
+      for (const n of JOINTS) pose[n][1] += bob;
+      if (k.stance !== 'cheer') {
+        pose.haL[1] += Math.sin(k.t * 6) * 0.05; pose.haR[1] += Math.sin(k.t * 6 + 1.6) * 0.05;
+        pose.hip[1] += Math.sin(k.t * 12) * 0.015;
+      }
+    }
     const fast = k.stance.startsWith('dive') || k.stance === 'star' ? 16 : 11;
-    blendPose(k.j, KP[k.stance], 1 - Math.exp(-fast * dt));
+    blendPose(k.j, pose, 1 - Math.exp(-fast * dt));
   }
 
   function keeperHit(bx, by) {
@@ -773,7 +891,7 @@
 
   function updateBall(dt) {
     const b = ball;
-    const n = 6, h = dt / n;
+    const n = 4, h = dt / n;
     for (let i = 0; i < n; i++) {
       const pz = b.z;
       b.vy -= G * h;
@@ -781,9 +899,9 @@
       b.t += h;
       if (b.y <= BALL_R && b.vy < 0) {
         b.y = BALL_R;
-        if (!b.bounced && (b.type === 'bound' || b.type === 'spin') && b.state === 'fly') {
+        if (!b.bounced && (b.type === 'bound' || b.spin) && b.state === 'fly') {
           b.bounced = true;
-          if (b.type === 'spin') {
+          if (b.spin) {
             b.vy = -b.vy * 0.5; b.vz *= 0.78;
             const tt = b.z / Math.max(0.5, -b.vz);
             b.vx = (b.tx - b.x) / tt;
@@ -819,17 +937,15 @@
         b.x = clamp(b.x, -GOAL_HW + BALL_R, GOAL_HW - BALL_R);
       }
     }
-    b.spinAng = (b.spinAng || 0) + dt * (b.type === 'spin' ? 30 : 12);
-    b.trail.push([b.x, b.y, b.z]);
-    if (b.trail.length > 14) b.trail.shift();
+    b.spinAng += dt * (b.spin ? 30 : 12);
   }
 
   function resolveShot(kind) {
     const b = ball;
     b.state = kind;
     if (game.phase !== 'play') return;
-    const tname = TIMINGS[b.timing].name, sname = SHOT_TYPES[b.type].name;
-    const label = `${tname}・${sname}シュート`;
+    keeper.result = kind === 'save' ? 'save' : kind === 'goal' ? 'goal' : 'miss';
+    const label = `${TIMINGS[b.timing].name}・${SHOT_TYPES[b.type].name}シュート`;
     if (kind === 'goal') {
       game.combo++; game.goals++;
       let pts = Math.round(SHOT_TYPES[b.type].pts * TIMINGS[b.timing].mult);
@@ -839,7 +955,7 @@
       game.score += pts;
       showMsg('GOAL!!', `${label}　+${pts}${corner ? '（隅！）' : ''}${game.combo > 1 ? `　${game.combo}連続！` : ''}`, 'goal', 2.6);
       sfx.net(); sfx.cheer(b.timing === 'musasabi' ? 1.3 : 1);
-      launchConfetti(b.timing === 'musasabi' ? 1.6 : 1);
+      Scene3D.confetti(b.timing === 'musasabi' ? 1.6 : 1);
       cheer = 1;
       finishAttempt(true, `GOAL ${label} +${pts}`);
     } else {
@@ -852,350 +968,321 @@
     }
   }
 
-  // ================= 紙吹雪 =================
-  function launchConfetti(power = 1) {
-    const cols = ['#ff4757', '#ffd32a', '#2ed573', '#1e90ff', '#ff6bcb', '#ffffff', '#ffa502', '#7bed9f'];
-    const n = Math.floor(260 * power);
-    for (let i = 0; i < n; i++) {
-      const fromLeft = i % 2 === 0;
-      const top = i % 5 === 0;
-      confetti.push({
-        x: top ? rand(0, W) : fromLeft ? rand(-10, 30) : rand(W - 30, W + 10),
-        y: top ? rand(-60, -10) : H * rand(0.75, 0.95),
-        vx: top ? rand(-40, 40) : (fromLeft ? 1 : -1) * rand(120, 420),
-        vy: top ? rand(20, 80) : -rand(500, 950) * (H / 800),
-        r: rand(0, 6.28), vr: rand(-12, 12), fl: rand(0, 6.28), vf: rand(6, 14),
-        w: rand(6, 11), h: rand(10, 17), c: pick(cols), life: rand(3.5, 5.5),
-      });
+  // ナビ: 今押すとよいボタン・跳ぶべき時
+  function updateNav() {
+    hintBtn = null; jumpHint = false;
+    if (!game.nav || game.phase !== 'play' || !player) return;
+    const p = player;
+    if (p.state === 'run') {
+      // 次の1歩で6mラインに入る / 4歩目になる → 跳べ
+      const left = STEP_INTERVAL - p.stepT;
+      const nx = p.x + p.vx * (left + 0.05), nz = p.z + p.vz * (left + 0.05);
+      jumpHint = p.steps === 3 || areaDist(nx, nz) < AREA_R + 0.1;
+    } else if (p.state === 'air' && !p.shot) {
+      const c = COUNTER[keeper.committed];
+      if (c) hintBtn = c.btn;
+      else if (p.y < 0.35 && p.vy < 0) hintBtn = 'normal'; // 着地しそう
     }
-  }
-  function updateConfetti(dt) {
-    for (const c of confetti) {
-      c.vy += 520 * dt;
-      c.vx *= Math.exp(-1.8 * dt);
-      c.vy = Math.min(c.vy, 110);
-      c.x += (c.vx + Math.sin(c.fl) * 30) * dt; c.y += c.vy * dt;
-      c.r += c.vr * dt; c.fl += c.vf * dt; c.life -= dt;
-    }
-    confetti = confetti.filter((c) => c.life > 0 && c.y < H + 30);
-  }
-  function drawConfetti() {
-    for (const c of confetti) {
-      ctx.save();
-      ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.scale(1, Math.cos(c.fl));
-      ctx.globalAlpha = clamp(c.life, 0, 1);
-      ctx.fillStyle = c.c; ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
-      ctx.restore();
-    }
-    ctx.globalAlpha = 1;
   }
 
-  // ================= 描画 =================
+  // ================= カメラ =================
+  const cam = { x: -14, y: 3, z: 12, lx: 0, ly: 1, lz: 0, init: false };
   function updateCamera(dt) {
-    const p = player;
-    if (!p) return;
-    // ゴールから見てプレイヤーの後ろ側にカメラを置く
-    const tgt = ball && ball.state === 'fly' ? { x: (p.x + ball.x) / 2, z: Math.max(p.z, 1.5) } : p;
-    let dx = tgt.x * 0.75, dz = Math.max(tgt.z, 1.5) + 1.2;
-    const dl = Math.hypot(dx, dz);
-    const dist = Math.max(dl + 4.2, 8.5);
-    const nx = dx / dl, nz = dz / dl;
-    const cx = nx * dist, cz = nz * dist;
-    const a = 1 - Math.exp(-4 * dt);
-    cam.x = lerp(cam.x, cx, a); cam.z = lerp(cam.z, cz, a);
-    const high = p.state === 'air' || p.state === 'ground' ? (p.musasabi ? 1.6 : 0.8) : 0;
-    cam.y = lerp(cam.y, 2.5 + high + (p.y || 0) * 0.3, a);
-    cam.pitch = lerp(cam.pitch, 0.16 + high * 0.08, a);
-    // ゴールの少し手前を見る
-    const lx = p.x * 0.35 - cam.x, lz = 1.0 - cam.z;
-    const ll = Math.hypot(lx, lz);
-    cam.fx = lerp(cam.fx, lx / ll, a); cam.fz = lerp(cam.fz, lz / ll, a);
-    const fl = Math.hypot(cam.fx, cam.fz); cam.fx /= fl; cam.fz /= fl;
+    let tx, ty, tz, lx, ly, lz;
+    if (!player) {
+      // タイトル: 左サイドからゴールを眺める
+      tx = -10 + Math.sin(game.time * 0.15) * 2; ty = 3.4; tz = 10.5;
+      lx = -1; ly = 1.2; lz = 1;
+    } else {
+      const p = player;
+      const fx = ball && ball.state === 'fly' ? (p.x + ball.x) / 2 : p.x;
+      let dx = fx * 0.75, dz = Math.max(p.z, 1.5) + 1.2;
+      const dl = Math.hypot(dx, dz);
+      const dist = Math.max(dl + 4.2, 8.5);
+      tx = (dx / dl) * dist; tz = (dz / dl) * dist;
+      const high = p.state === 'air' || p.state === 'ground' ? (p.musasabi ? 1.6 : 0.8) : 0;
+      ty = 2.6 + high + p.y * 0.3;
+      lx = p.x * 0.35; ly = 1.0 - high * 0.15; lz = 1.0;
+    }
+    const a = cam.init ? 1 - Math.exp(-4 * dt) : 1;
+    cam.init = true;
+    cam.x = lerp(cam.x, tx, a); cam.y = lerp(cam.y, ty, a); cam.z = lerp(cam.z, tz, a);
+    cam.lx = lerp(cam.lx, lx, a); cam.ly = lerp(cam.ly, ly, a); cam.lz = lerp(cam.lz, lz, a);
   }
 
-  function drawBackground() {
-    // 天井・観客席
-    const g = ctx.createLinearGradient(0, 0, 0, H * 0.5);
-    g.addColorStop(0, '#0b1020'); g.addColorStop(1, '#1d2541');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    // 照明
-    for (let i = 0; i < 5; i++) {
-      const p = proj(-12 + i * 6, 12, -10);
-      if (!p) continue;
-      const rg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 80);
-      rg.addColorStop(0, 'rgba(255,255,230,.9)'); rg.addColorStop(1, 'rgba(255,255,230,0)');
-      ctx.fillStyle = rg; ctx.fillRect(p.x - 80, p.y - 80, 160, 160);
+  // ================= 2D 表示(方角リング・ボタンなど) =================
+  const H = 640;
+  let W = 960, overlayScale = 1;
+  const RING = { x: 125, y: 510, r: 95, dead: 14 };
+  // 右側のボタン(ひし形): 上 ループ / 左 左スピン / 右 右スピン / まん中 バウンド / 下 ダッシュ(長押し)
+  // その左の列: 上 ノーマル / 下 ジャンプ(ダッシュ中の3歩目だけ自動でムササビに変わる。ずっと表示)
+  // シュートボタンは地上で押すとステップシュート
+  const BTN = {
+    bound: { x: 785, y: 465, r: 50, key: 'K' },
+    loop: { x: 785, y: 360, r: 46, key: 'I' },
+    spinL: { x: 680, y: 465, r: 46, key: 'J' },
+    spinR: { x: 890, y: 465, r: 46, key: 'L' },
+    dash: { x: 785, y: 570, r: 48, key: 'Shift' },
+    normal: { x: 560, y: 420, r: 46, key: 'U' },
+    jump: { x: 560, y: 540, r: 54, key: 'Space' },
+  };
+  const BTN_SUB = { loop: '高く山なり', normal: '速いシュート', spinL: '左へ切れる', spinR: '右へ切れる', bound: '足元を抜く' };
+  const pointers = new Map(); // pointerId -> 'ring' | ボタンの名前 | 'none'
+  const ringInput = { active: false, mx: 0, my: 0 };
+
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+  }
+  function buttonOn(name) {
+    if (!player || game.phase !== 'play') return false;
+    if (name === 'jump') return canJump();
+    if (name === 'dash') return player.state === 'run' || player.state === 'pass';
+    return canShoot();
+  }
+  function hitButton(p) {
+    let best = null, bd = Infinity;
+    for (const name in BTN) {
+      const b = BTN[name];
+      const d = Math.hypot(p.x - b.x, p.y - b.y) - b.r;
+      if (d < bd) { bd = d; best = name; }
     }
-    // スタンド
-    if (polyPath([[-40, 0.9, -7.6], [40, 0.9, -7.6], [40, 7, -14.5], [-40, 7, -14.5]])) {
-      ctx.fillStyle = '#2a2f45'; ctx.fill();
+    return bd <= (isTouch ? 18 : 8) ? best : null;
+  }
+  function setRing(p) {
+    const dx = p.x - RING.x, dy = p.y - RING.y;
+    const d = Math.hypot(dx, dy);
+    if (d < RING.dead) { ringInput.mx = 0; ringInput.my = 0; return; }
+    // 円の方角合わせ: 16方位にスナップ
+    const step = Math.PI / 8;
+    const ang = Math.round(Math.atan2(dx, -dy) / step) * step;
+    const mag = Math.min(1, (d - RING.dead) / (RING.r * 0.45)); // 少し倒すだけでいっぱい
+    ringInput.mx = Math.sin(ang) * mag;
+    ringInput.my = Math.cos(ang) * mag;
+  }
+  function pressButton(name) {
+    if (name === 'jump') pressJump();
+    else doShoot(name);
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    initAudio();
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    const p = canvasPos(e);
+    if (game.paused || game.phase === 'title' || game.phase === 'over') { pointers.set(e.pointerId, 'none'); return; }
+    if (Math.hypot(p.x - RING.x, p.y - RING.y) <= RING.r + 30) {
+      pointers.set(e.pointerId, 'ring');
+      ringInput.active = true;
+      setRing(p);
+      return;
     }
-    // 観客
-    const sorted = crowd;
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const c = sorted[i];
-      const jump = cheer > 0.01 ? Math.abs(Math.sin(game.time * 9 + c.ph)) * 0.35 * cheer : Math.sin(game.time * 1.5 + c.ph) * 0.02;
-      const p = proj(c.x, c.y + jump, c.z);
-      if (!p || p.x < -20 || p.x > W + 20) continue;
-      const r = 0.15 * p.k;
-      ctx.fillStyle = c.c;
-      ctx.fillRect(p.x - r * 1.5, p.y, r * 3, r * 3.2 * c.h);
-      ctx.fillStyle = '#f0c8a0';
-      ctx.beginPath(); ctx.arc(p.x, p.y - r * 0.4, r, 0, 6.283); ctx.fill();
-      if (cheer > 0.3 && (i % 3 === 0)) { // 手を上げる
-        ctx.strokeStyle = '#f0c8a0'; ctx.lineWidth = Math.max(1, r * 0.6);
-        ctx.beginPath(); ctx.moveTo(p.x - r * 1.3, p.y + r * 0.5); ctx.lineTo(p.x - r * 2, p.y - r * 2.2);
-        ctx.moveTo(p.x + r * 1.3, p.y + r * 0.5); ctx.lineTo(p.x + r * 2, p.y - r * 2.2); ctx.stroke();
-      }
+    const b = hitButton(p);
+    if (b && b !== 'dash') pressButton(b);
+    pointers.set(e.pointerId, b || 'none');
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (pointers.get(e.pointerId) === 'ring') setRing(canvasPos(e));
+  });
+  function releasePointer(e) {
+    if (pointers.get(e.pointerId) === 'ring') { ringInput.active = false; ringInput.mx = 0; ringInput.my = 0; }
+    pointers.delete(e.pointerId);
+  }
+  canvas.addEventListener('pointerup', releasePointer);
+  canvas.addEventListener('pointercancel', releasePointer);
+
+  const KEYMAP = { u: 'normal', i: 'loop', j: 'spinL', l: 'spinR', k: 'bound' };
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+    if (input.keys.has(k)) return;
+    input.keys.add(k);
+    initAudio();
+    if (game.phase === 'title' || game.phase === 'over') {
+      if (k === ' ' || k === 'Enter') startGame();
+      return;
     }
-    // 広告ボード
-    if (polyPath([[-40, 0, -7.5], [40, 0, -7.5], [40, 0.9, -7.5], [-40, 0.9, -7.5]])) {
-      const p1 = proj(0, 0.9, -7.5), p2 = proj(0, 0, -7.5);
-      const lg = ctx.createLinearGradient(0, p1 ? p1.y : 0, 0, p2 ? p2.y : 1);
-      lg.addColorStop(0, '#1060c0'); lg.addColorStop(1, '#0a3a80');
-      ctx.fillStyle = lg; ctx.fill();
-      for (let i = -3; i <= 3; i++) {
-        const p = proj(i * 6, 0.45, -7.49);
-        if (!p) continue;
-        ctx.fillStyle = 'rgba(255,255,255,.9)';
-        ctx.font = `bold ${Math.max(8, 0.42 * p.k)}px sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(i % 2 ? 'MUSASABI SHOOT' : 'HANDBALL CUP', p.x, p.y);
-      }
-    }
+    if (k === 'p' || k === 'Escape') { togglePause(); return; }
+    if (k === 'm') toggleMute();
+    if (k === 'n') toggleNav();
+    if (game.paused) return;
+    if (k === ' ' || k === 'z') pressJump();
+    if (KEYMAP[k]) doShoot(KEYMAP[k]);
+  });
+  window.addEventListener('keyup', (e) => { input.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); });
+  window.addEventListener('blur', () => input.keys.clear());
+
+  function readInput() {
+    const k = input.keys;
+    let mx = 0, my = 0;
+    if (k.has('ArrowUp') || k.has('w')) my += 1;
+    if (k.has('ArrowDown') || k.has('s')) my -= 1;
+    if (k.has('ArrowRight') || k.has('d')) mx += 1;
+    if (k.has('ArrowLeft') || k.has('a')) mx -= 1;
+    if (mx || my) { const m = Math.hypot(mx, my); mx /= m; my /= m; }
+    else if (ringInput.active) { mx = ringInput.mx; my = ringInput.my; }
+    let dash = k.has('Shift');
+    for (const v of pointers.values()) if (v === 'dash') dash = true;
+    if (!input.bot) { input.jx = mx; input.jy = my; input.dash = dash; }
   }
 
-  function dPath(r, steps = 24) {
-    const pts = [];
-    for (let i = 0; i <= steps; i++) {
-      const a = -Math.PI / 2 + (Math.PI / 2) * (i / steps);
-      pts.push([-GOAL_HW + r * Math.sin(a), 0, r * Math.cos(a)]);
-    }
-    for (let i = 0; i <= steps; i++) {
-      const a = (Math.PI / 2) * (i / steps);
-      pts.push([GOAL_HW + r * Math.sin(a), 0, r * Math.cos(a)]);
-    }
-    return pts;
-  }
-  const D6 = dPath(AREA_R), D9 = dPath(FREE_R, 30);
-
-  function drawFloor() {
-    if (polyPath([[-40, 0, -7.5], [40, 0, -7.5], [40, 0, 40], [-40, 0, 40]])) { ctx.fillStyle = '#244c84'; ctx.fill(); }
-    if (polyPath([[-10, 0, 0], [10, 0, 0], [10, 0, 22], [-10, 0, 22]])) {
-      ctx.fillStyle = '#d98a3d'; ctx.fill();
-    }
-    // 床板の木目
+  function drawControls() {
+    if (!player || (game.phase !== 'play' && game.phase !== 'result')) return;
+    // 方角リング
     ctx.save();
-    if (polyPath([[-10, 0, 0], [10, 0, 0], [10, 0, 22], [-10, 0, 22]])) ctx.clip();
-    for (let x = -10; x <= 10; x += 0.5) line3([x, 0, 0], [x, 0, 22], 0.02, 'rgba(120,60,10,.18)');
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.arc(RING.x, RING.y, RING.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+    const mx = input.jx, my = input.jy, mag = Math.hypot(mx, my);
+    const cur = mag > 0.1 ? Math.atan2(mx, my) : null;
+    for (let i = 0; i < 16; i++) {
+      const ang = i * Math.PI / 8;
+      const major = i % 2 === 0;
+      const diff = cur == null ? 9 : Math.abs(((ang - cur + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      const lit = diff < 0.2;
+      ctx.fillStyle = lit ? '#ffe14d' : (major ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.35)');
+      const rr = RING.r - 12;
+      ctx.beginPath();
+      ctx.arc(RING.x + Math.sin(ang) * rr, RING.y - Math.cos(ang) * rr, lit ? 7 : (major ? 4.5 : 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    const airAim = player.state !== 'run' && player.state !== 'pass';
+    ctx.fillText(airAim ? '高く' : '前・高く', RING.x, RING.y - RING.r - 6);
+    ctx.fillText(airAim ? '低く' : '後ろ・低く', RING.x, RING.y + RING.r + 15);
+    const kx = RING.x + mx * RING.r * 0.6, ky = RING.y - my * RING.r * 0.6;
+    ctx.fillStyle = mag > 0.1 ? '#ffe14d' : 'rgba(255,255,255,0.6)';
+    ctx.beginPath(); ctx.arc(kx, ky, RING.r * 0.17, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // ゴールエリア
-    if (polyPath(D6)) { ctx.fillStyle = '#3d7fd0'; ctx.fill(); }
-    // ライン
-    const white = 'rgba(255,255,255,.92)';
-    line3([-10, 0, 0], [10, 0, 0], 0.05, white);
-    line3([-10, 0, 0], [-10, 0, 22], 0.05, white);
-    line3([10, 0, 0], [10, 0, 22], 0.05, white);
-    const flash = game.lineFlash > 0 && Math.floor(game.time * 10) % 2 === 0;
-    for (let i = 0; i < D6.length - 1; i++) line3(D6[i], D6[i + 1], 0.05, flash ? '#ff3b3b' : white);
-    for (let i = 0; i < D9.length - 1; i += 2) line3(D9[i], D9[i + 1], 0.05, white);
-    line3([-0.5, 0, 7], [0.5, 0, 7], 0.05, white);
-    line3([-0.08, 0, 4], [0.08, 0, 4], 0.05, white);
-    // 足あと
+
+    // ボタン
+    ctx.save();
+    const blink = Math.floor(game.time * 10) % 2 === 0;
+    for (const name in BTN) {
+      const b = BTN[name];
+      const enabled = buttonOn(name);
+      let held = false;
+      for (const v of pointers.values()) if (v === name) held = true;
+      const isJump = name === 'jump';
+      const musa = isJump && canMusa();
+      const hint = enabled && blink && (hintBtn === name || (isJump && jumpHint && !musa) ||
+        (name === 'dash' && game.nav && player.state === 'run' && player.steps === 2 && !input.dash));
+      ctx.globalAlpha = enabled ? 0.9 : 0.35;
+      const r = musa ? b.r * (1.12 + 0.05 * Math.sin(game.time * 16)) : b.r;
+      if (musa) {
+        const gr = ctx.createLinearGradient(0, b.y - r, 0, b.y + r);
+        gr.addColorStop(0, '#ffcf3a'); gr.addColorStop(1, '#ff8a00');
+        ctx.fillStyle = held ? '#ffe14d' : gr;
+      } else {
+        ctx.fillStyle = held ? 'rgba(255,225,77,0.9)' : hint ? 'rgba(255,140,60,0.85)' : 'rgba(0,0,0,0.42)';
+      }
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = musa ? '#fff3c0' : 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = musa ? 4 : 2.5; ctx.stroke();
+      const fk = b.r / 46;
+      // 球筋のアイコン
+      if (name === 'dash' && input.dash && enabled) held = true;
+      if (!isJump && name !== 'dash') drawShotIcon(name, b, fk, held);
+      ctx.fillStyle = held || musa ? '#2a1400' : '#fff';
+      ctx.textAlign = 'center';
+      if (name === 'dash') {
+        ctx.font = `900 ${Math.round(15 * fk)}px sans-serif`;
+        ctx.fillText('ダッシュ', b.x, b.y + 2 * fk, r * 1.8);
+        ctx.font = `bold ${Math.round(9.5 * fk)}px sans-serif`;
+        ctx.fillText('長押し', b.x, b.y + 16 * fk, r * 1.6);
+      } else if (isJump) {
+        ctx.font = `900 ${Math.round((musa ? 19 : 17) * fk)}px sans-serif`;
+        ctx.fillText(musa ? 'ムササビ' : 'ジャンプ', b.x, b.y + 6 * fk, r * 1.8);
+      } else {
+        ctx.font = `bold ${Math.round(16 * fk)}px sans-serif`;
+        ctx.fillText(SHOT_TYPES[name].name, b.x, b.y + 8 * fk, b.r * 1.7);
+        ctx.font = `bold ${Math.round(9.5 * fk)}px sans-serif`;
+        ctx.fillText(BTN_SUB[name], b.x, b.y + 22 * fk, b.r * 1.6);
+      }
+      if (!isTouch) { ctx.font = '10px sans-serif'; ctx.fillStyle = held || musa ? '#2a1400' : 'rgba(255,255,255,0.8)'; ctx.fillText(b.key, b.x, b.y + r - 6); }
+    }
+    ctx.restore();
+  }
+  function drawShotIcon(name, b, fk, held) {
+    ctx.save();
+    ctx.translate(b.x, b.y - b.r * 0.42);
+    ctx.scale(fk, fk);
+    ctx.strokeStyle = held ? '#222' : '#ffe14d'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (name === 'loop') { ctx.moveTo(-15, 6); ctx.quadraticCurveTo(0, -18, 15, 6); }
+    else if (name === 'normal') { ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.moveTo(9, -5); ctx.lineTo(15, 0); ctx.lineTo(9, 5); }
+    else if (name === 'spinL') { ctx.moveTo(-15, -6); ctx.lineTo(4, 6); ctx.lineTo(-8, -6); ctx.moveTo(-8, -6); ctx.lineTo(-3, -6); ctx.moveTo(-8, -6); ctx.lineTo(-7, -1); }
+    else if (name === 'spinR') { ctx.moveTo(15, -6); ctx.lineTo(-4, 6); ctx.lineTo(8, -6); ctx.moveTo(8, -6); ctx.lineTo(3, -6); ctx.moveTo(8, -6); ctx.lineTo(7, -1); }
+    else { ctx.moveTo(-15, -8); ctx.lineTo(-2, 6); ctx.lineTo(15, -4); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ゴールの狙い・キーパーの吹き出し・足あとの番号・ナビ
+  function drawWorldMarks() {
+    if (!player) return;
+    // 足あとの番号
+    ctx.textAlign = 'center';
     for (const f of footprints) {
-      const p = proj(f.x, 0.01, f.z);
-      if (!p) continue;
-      ctx.fillStyle = f.n >= 4 ? 'rgba(255,60,60,.9)' : 'rgba(255,255,255,.75)';
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 0.07 * p.k, 0.05 * p.k, 0, 0, 6.283); ctx.fill();
-      ctx.font = `bold ${Math.max(10, 0.25 * p.k)}px sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const p = Scene3D.project(f.x, 0.05, f.z);
+      if (p.behind) continue;
+      ctx.font = 'bold 18px sans-serif';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.fillStyle = f.n >= 4 ? '#ff4040' : f.n === 3 ? '#ffd84a' : '#fff';
-      ctx.fillText(f.n, p.x, p.y - 0.06 * p.k);
+      ctx.strokeText(f.n, p.x, p.y - 10); ctx.fillText(f.n, p.x, p.y - 10);
     }
-  }
-
-  function shadow(x, z, r, a = 0.35) {
-    const p = proj(x, 0.005, z);
-    if (!p) return;
-    ctx.fillStyle = `rgba(0,0,0,${a})`;
-    ctx.beginPath(); ctx.ellipse(p.x, p.y, r * p.k, r * p.k * 0.35, 0, 0, 6.283); ctx.fill();
-  }
-
-  function drawGoalBack() {
-    const net = 'rgba(255,255,255,.35)';
-    const bz = -0.9;
-    for (let x = -GOAL_HW; x <= GOAL_HW + 1e-3; x += 0.15) {
-      line3([x, GOAL_H, 0], [x, GOAL_H, bz * 0.8], 0.01, net);
-      line3([x, GOAL_H, bz * 0.8], [x, 0, bz], 0.01, net);
-    }
-    for (let i = 0; i <= 13; i++) {
-      const t = i / 13, y = GOAL_H * (1 - t), z = lerp(bz * 0.8, bz, t);
-      line3([-GOAL_HW, y, z], [GOAL_HW, y, z], 0.01, net);
-      line3([-GOAL_HW, y, z], [-GOAL_HW, y, 0], 0.01, net);
-      line3([GOAL_HW, y, z], [GOAL_HW, y, 0], 0.01, net);
-    }
-  }
-  function drawGoalFrame() {
-    const seg = 0.2;
-    for (const sx of [-GOAL_HW - 0.04, GOAL_HW + 0.04]) {
-      for (let y = 0, i = 0; y < GOAL_H; y += seg, i++) {
-        line3([sx, y, 0], [sx, Math.min(GOAL_H + 0.04, y + seg), 0], 0.08, i % 2 ? '#fff' : '#e53030');
+    // コースの狙い(ゴールの面)
+    if (game.phase === 'play' && !player.shot) {
+      const p = Scene3D.project(input.jx * 1.3, 1.0 + input.jy * 0.78, 0.02);
+      if (!p.behind) {
+        const r = 11;
+        ctx.strokeStyle = 'rgba(255,230,60,.95)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p.x - r * 1.6, p.y); ctx.lineTo(p.x + r * 1.6, p.y);
+        ctx.moveTo(p.x, p.y - r * 1.6); ctx.lineTo(p.x, p.y + r * 1.6); ctx.stroke();
       }
     }
-    for (let x = -GOAL_HW - 0.04, i = 0; x < GOAL_HW + 0.04; x += seg, i++) {
-      line3([x, GOAL_H + 0.04, 0], [Math.min(GOAL_HW + 0.04, x + seg), GOAL_H + 0.04, 0], 0.08, i % 2 ? '#fff' : '#e53030');
-    }
-  }
-
-  function drawAim() {
-    if (!player || game.phase !== 'play' || player.shot) return;
-    const tx = input.jx * 1.3, ty = 1.0 + input.jy * 0.78;
-    const p = proj(tx, ty, 0.02);
-    if (!p) return;
-    const r = 0.2 * p.k;
-    ctx.strokeStyle = 'rgba(255,230,60,.95)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(p.x - r * 1.5, p.y); ctx.lineTo(p.x + r * 1.5, p.y);
-    ctx.moveTo(p.x, p.y - r * 1.5); ctx.lineTo(p.x, p.y + r * 1.5); ctx.stroke();
-  }
-
-  function limb(pts, a, b, r, color) {
-    const pa = pts[a], pb = pts[b];
-    if (!pa || !pb) return;
-    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, r * 2 * (pa.k + pb.k) / 2);
-    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
-  }
-  function poly(pts, names, color) {
-    if (names.some((n) => !pts[n])) return;
-    ctx.fillStyle = color; ctx.beginPath();
-    names.forEach((n, i) => (i ? ctx.lineTo(pts[n].x, pts[n].y) : ctx.moveTo(pts[n].x, pts[n].y)));
-    ctx.closePath(); ctx.fill();
-  }
-
-  function drawPlayer() {
-    const p = player;
-    const pts = {};
-    for (const n of JOINTS) { const w = jointWorld(p, n); pts[n] = proj(w[0], w[1], w[2]); }
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const skin = '#f1c27d', jersey = '#1e5bd8', shorts = '#10214d';
-    // ムササビの膜
-    if (p.musasabi && p.state !== 'run') {
-      poly(pts, ['haL', 'elL', 'shL', 'hiL', 'knL', 'ftL'], 'rgba(150,95,45,.75)');
-      poly(pts, ['haR', 'elR', 'shR', 'hiR', 'knR', 'ftR'], 'rgba(150,95,45,.75)');
-    }
-    limb(pts, 'hiL', 'knL', 0.085, shorts); limb(pts, 'knL', 'ftL', 0.065, skin);
-    limb(pts, 'hiR', 'knR', 0.085, shorts); limb(pts, 'knR', 'ftR', 0.065, skin);
-    for (const f of ['ftL', 'ftR']) if (pts[f]) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pts[f].x, pts[f].y, 0.07 * pts[f].k, 0, 6.283); ctx.fill(); }
-    poly(pts, ['shL', 'shR', 'hiR', 'hiL'], jersey);
-    limb(pts, 'shL', 'hiL', 0.07, jersey); limb(pts, 'shR', 'hiR', 0.07, jersey);
-    // 背番号
-    if (pts.neck && pts.hip) {
-      const cx = (pts.neck.x + pts.hip.x) / 2, cy = (pts.neck.y + pts.hip.y) / 2;
-      ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(8, 0.26 * pts.neck.k)}px sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('7', cx, cy);
-    }
-    limb(pts, 'shL', 'elL', 0.06, skin); limb(pts, 'elL', 'haL', 0.055, skin);
-    limb(pts, 'shR', 'elR', 0.06, skin); limb(pts, 'elR', 'haR', 0.055, skin);
-    if (pts.head) {
-      const k = pts.head.k;
-      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(pts.head.x, pts.head.y, 0.12 * k, 0, 6.283); ctx.fill();
-      ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.arc(pts.head.x, pts.head.y - 0.02 * k, 0.115 * k, 0, 6.283); ctx.fill();
-    }
-  }
-
-  function drawKeeper() {
+    // キーパーの吹き出し
     const k = keeper;
-    const pts = {};
-    for (const n of JOINTS) { const j = k.j[n]; pts[n] = proj(k.x + j[0], j[1], k.z + j[2]); }
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const skin = '#e8b88a', jersey = '#f2c230', shorts = '#222';
-    limb(pts, 'hiL', 'knL', 0.09, shorts); limb(pts, 'knL', 'ftL', 0.07, '#333');
-    limb(pts, 'hiR', 'knR', 0.09, shorts); limb(pts, 'knR', 'ftR', 0.07, '#333');
-    poly(pts, ['shL', 'shR', 'hiR', 'hiL'], jersey);
-    limb(pts, 'shL', 'hiL', 0.08, jersey); limb(pts, 'shR', 'hiR', 0.08, jersey);
-    limb(pts, 'shL', 'elL', 0.065, jersey); limb(pts, 'elL', 'haL', 0.06, skin);
-    limb(pts, 'shR', 'elR', 0.065, jersey); limb(pts, 'elR', 'haR', 0.06, skin);
-    if (pts.head) {
-      const s = pts.head.k;
-      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(pts.head.x, pts.head.y, 0.12 * s, 0, 6.283); ctx.fill();
-      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(pts.head.x, pts.head.y - 0.06 * s, 0.1 * s, Math.PI, 0); ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.fillRect(pts.head.x - 0.05 * s, pts.head.y, 0.025 * s, 0.025 * s);
-      ctx.fillRect(pts.head.x + 0.025 * s, pts.head.y, 0.025 * s, 0.025 * s);
-    }
-  }
-
-  function drawKeeperLabel() {
-    const k = keeper;
-    if (!k) return;
-    if (k.labelT > 0 && k.label) {
-      const top = proj(k.x, 2.6, k.z);
-      if (top) {
-        const fs = clamp(0.24 * top.k, 13, 24);
+    if (k && k.labelT > 0 && k.label) {
+      const top = Scene3D.project(k.x, 2.65, k.z);
+      if (!top.behind) {
+        const fs = 18;
         ctx.font = `bold ${fs}px sans-serif`;
-        const w = ctx.measureText(k.label).width + 16;
+        const w = ctx.measureText(k.label).width + 18;
         ctx.globalAlpha = clamp(k.labelT * 2, 0, 1);
         ctx.fillStyle = 'rgba(255,255,255,.95)';
-        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(top.x - w / 2, top.y - fs - 8, w, fs + 12, 8) : ctx.rect(top.x - w / 2, top.y - fs - 8, w, fs + 12);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(top.x - w / 2, top.y - fs - 10, w, fs + 14, 9); else ctx.rect(top.x - w / 2, top.y - fs - 10, w, fs + 14);
         ctx.fill();
-        ctx.fillStyle = '#d02020'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(k.label, top.x, top.y - fs / 2 - 2);
+        ctx.beginPath(); ctx.moveTo(top.x - 7, top.y + 4); ctx.lineTo(top.x, top.y + 12); ctx.lineTo(top.x + 7, top.y + 4); ctx.fill();
+        ctx.fillStyle = '#d02020'; ctx.textBaseline = 'middle';
+        ctx.fillText(k.label, top.x, top.y - fs / 2 - 3);
+        ctx.textBaseline = 'alphabetic';
         ctx.globalAlpha = 1;
       }
     }
-  }
-
-
-  function drawBallAt(x, y, z, ang = 0) {
-    const p = proj(x, y, z);
-    if (!p) return;
-    const r = Math.max(2, BALL_R * p.k);
-    ctx.fillStyle = '#fafafa'; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.fill();
-    ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.clip();
-    ctx.translate(p.x, p.y); ctx.rotate(ang);
-    ctx.fillStyle = '#e8402a'; ctx.fillRect(-r, -r * 0.25, r * 2, r * 0.5);
-    ctx.fillStyle = '#1f5fd0'; ctx.fillRect(-r * 0.25, -r, r * 0.5, r * 2);
-    ctx.restore();
-    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.stroke();
-  }
-  function drawBall() {
-    if (ball) {
-      if (ball.state === 'fly') {
-        ctx.lineCap = 'round';
-        for (let i = 1; i < ball.trail.length; i++) {
-          const a = ball.trail[i - 1], b = ball.trail[i];
-          line3(a, b, 0.08 * (i / ball.trail.length), `rgba(255,255,255,${0.35 * i / ball.trail.length})`);
-        }
+    // ナビの「跳べ！」
+    if (jumpHint && game.phase === 'play' && player.state === 'run') {
+      const p = Scene3D.project(player.x, 2.4, player.z);
+      if (!p.behind && Math.floor(game.time * 8) % 2 === 0) {
+        ctx.font = '900 26px sans-serif';
+        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = player.steps === 3 && input.dash ? '#ffd84a' : '#ff9a3c';
+        const t = player.steps === 3 && input.dash ? 'ムササビ！' : '跳べ！';
+        ctx.strokeText(t, p.x, p.y); ctx.fillText(t, p.x, p.y);
       }
-      drawBallAt(ball.x, ball.y, ball.z, ball.spinAng);
-    } else if (player) {
-      const w = jointWorld(player, 'haR');
-      drawBallAt(w[0], w[1] + 0.06, w[2] - 0.04);
     }
   }
 
-  function render() {
+  function drawOverlay() {
+    ctx.setTransform(overlayScale, 0, 0, overlayScale, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    drawBackground();
-    drawFloor();
-    if (!player) return;
-    shadow(keeper.x, keeper.z, 0.5);
-    shadow(player.x, player.z, player.musasabi && player.state !== 'run' ? 0.7 : 0.4, 0.35 - clamp(player.y * 0.12, 0, 0.2));
-    if (ball) shadow(ball.x, ball.z, 0.1, 0.3);
-    // 奥から順に描く
-    const items = [
-      { z: -0.5, f: drawGoalBack },
-      { z: 0, f: drawGoalFrame },
-      { z: 0.01, f: drawAim },
-      { z: keeper.z, f: drawKeeper },
-      { z: player.z, f: drawPlayer },
-    ];
-    if (ball) items.push({ z: ball.z, f: drawBall });
-    else items.push({ z: player.z - 0.01, f: drawBall });
-    items.sort((a, b) => a.z - b.z);
-    for (const it of items) it.f();
-    drawKeeperLabel();
+    drawWorldMarks();
+    drawControls();
+    if (game.paused) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H); }
   }
 
   // ================= HUD・メッセージ =================
@@ -1209,42 +1296,63 @@
     m.className = `show ${cls || ''}`;
     msgTimer = dur;
   }
+  let hudKey = '';
   function updateHud() {
-    $('#score').textContent = game.score;
-    $('#shotInfo').textContent = `${Math.min(game.shotNo, TOTAL_SHOTS)} / ${TOTAL_SHOTS} 本目`;
-    const st = $('#steps');
     const n = player ? player.steps : 0;
+    const chance = !!player && n === 3 && player.state === 'run' && game.phase === 'play';
+    const key = `${game.score}|${game.shotNo}|${n}|${chance}|${game.phase}|${game.best}|${game.nav}|${muted}`;
+    if (key === hudKey) return;
+    hudKey = key;
+    $('#score').textContent = game.score;
+    $('#best').textContent = game.best;
+    $('#shotInfo').textContent = `${Math.max(1, Math.min(game.shotNo, TOTAL_SHOTS))} / ${TOTAL_SHOTS} 本目`;
+    const st = $('#steps');
     st.querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < n));
-    st.classList.toggle('chance', !!player && n === 3 && player.state === 'run' && game.phase === 'play');
+    st.classList.toggle('chance', chance);
     if (game.phase === 'play') st.classList.remove('foul');
+    $('#hud').style.visibility = game.phase === 'title' ? 'hidden' : 'visible';
+    $('#navBtn').textContent = `ナビ ${game.nav ? 'ON' : 'OFF'}`;
+    $('#navBtn').classList.toggle('on', game.nav);
+    $('#muteBtn').textContent = muted ? '🔇' : '🔊';
   }
-  function updateButtons() {
-    const play = game.phase === 'play' && player;
-    $('#controls').classList.toggle('hidden', !(play || game.phase === 'result'));
-    $('#jumpBtn').classList.toggle('hidden', !(play && canJump()));
-    $('#musaBtn').classList.toggle('hidden', !(play && canMusa()));
-    $('#shotBtns').classList.toggle('hidden', !(play && canShoot()));
+  function toggleNav() { game.nav = !game.nav; saveNum('musasabi.nav', game.nav); updateHud(); }
+  function toggleMute() {
+    muted = !muted;
+    if (master) master.gain.value = muted ? 0 : 0.8;
+    updateHud();
   }
+  function togglePause() {
+    if (game.phase !== 'play' && game.phase !== 'result') return;
+    game.paused = !game.paused;
+    $('#pause').classList.toggle('show', game.paused);
+  }
+  $('#navBtn').addEventListener('click', toggleNav);
+  $('#muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
+  $('#startBtn').addEventListener('click', startGame);
+  $('#retryBtn').addEventListener('click', startGame);
+  $('#titleBtn').addEventListener('click', goTitle);
+  $('#resumeBtn').addEventListener('click', togglePause);
+  $('#pauseTitleBtn').addEventListener('click', goTitle);
+  // 裏に回ったら一時停止して音を止める
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if ((game.phase === 'play' || game.phase === 'result') && !game.paused) togglePause();
+      if (AC) AC.suspend();
+    } else if (AC) AC.resume();
+  });
 
   // ================= メインループ =================
-  let last = performance.now();
-  function frame(now) {
-    requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    update(dt);
-    updateHud();
-    updateButtons();
-    render();
-    drawConfetti();
-  }
   function update(dt) {
     game.time += dt;
-    if (player && game.phase !== 'title') {
+    if (game.paused) return;
+    if (game.slowT > 0) { game.slowT -= dt; dt *= 0.35; }
+    readInput();
+    if (player) {
+      updatePass(dt);
       updatePlayer(dt);
       updateKeeper(dt);
       if (ball) updateBall(dt);
-      updateCamera(dt);
+      updateNav();
     }
     if (game.phase === 'result') {
       game.waitT -= dt;
@@ -1253,17 +1361,93 @@
         else newAttempt();
       }
     }
+    if (game.lineFlash > 0) game.lineFlash -= dt;
     if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) $('#msg').classList.remove('show'); }
     cheer = Math.max(0, cheer - dt * 0.3);
     if (murmurGain) murmurGain.gain.value = 0.035 + cheer * 0.04;
-    updateConfetti(dt);
+    updateCamera(dt);
   }
 
-  // タイトル画面の背景用
-  player = null;
-  updateCamera(0);
+  function heldBall() {
+    if (ball) return { x: ball.x, y: ball.y, z: ball.z, spin: ball.spinAng };
+    if (!player) return null;
+    if (player.state === 'pass') {
+      if (pass.pos) return { x: pass.pos[0], y: pass.pos[1], z: pass.pos[2], spin: pass.t * 15 };
+      const w = jointWorld(mate, 'haR');
+      return { x: w[0], y: w[1] + 0.07, z: w[2], spin: 0 };
+    }
+    const w = jointWorld(player, 'haR');
+    const fx = Math.sin(player.heading), fz = -Math.cos(player.heading);
+    return { x: w[0] + fx * 0.06, y: w[1] + 0.07, z: w[2] + fz * 0.06, spin: 0 };
+  }
+
+  function worldJoints(p) {
+    const o = {};
+    for (const n of JOINTS) o[n] = jointWorld(p, n);
+    return o;
+  }
+  function keeperJoints(k) {
+    const o = {};
+    for (const n of JOINTS) { const j = k.j[n]; o[n] = [k.x + j[0], j[1], k.z + j[2]]; }
+    return o;
+  }
+  function renderScene(dt) {
+    Scene3D.render({
+      cam,
+      player: player && { j: worldJoints(player), heading: player.heading, x: player.x, z: player.z, y: player.y, musa: player.musasabi && player.state !== 'run', lean: player.lean },
+      keeper: keeper && { j: keeperJoints(keeper), x: keeper.x, z: keeper.z },
+      // カメラのすぐ近くに来た味方は描かない(画面をふさぐので)
+      mate: mate && Math.hypot(mate.x - cam.x, mate.z - cam.z) > 2.4 && { j: worldJoints(mate), heading: mate.heading, x: mate.x, z: mate.z, y: 0 },
+      ball: heldBall(),
+      footprints,
+      lineFlash: game.lineFlash > 0 ? 'foul' : (jumpHint && player && player.steps < 3 ? 'warn' : null),
+      cheer,
+      st: { shotNo: game.shotNo, total: TOTAL_SHOTS, score: game.score, goals: game.goals, phase: game.phase, time: game.time },
+    }, dt);
+  }
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);
+    W = Math.round(H * r.width / r.height);
+    if (isTouch) {
+      Object.assign(RING, { x: 168, y: 478, r: 122, dead: 16 });
+      const cx = W - 232;
+      for (const [k, x, y, rr] of [['loop', cx, 285, 60], ['spinL', cx - 145, 425, 60], ['spinR', cx + 145, 425, 60], ['bound', cx, 425, 62], ['dash', cx, 562, 58], ['normal', cx - 315, 370, 58], ['jump', cx - 315, 525, 70]]) Object.assign(BTN[k], { x, y, r: rr });
+    } else {
+      const cx = W - 175;
+      BTN.bound.x = BTN.loop.x = BTN.dash.x = cx; BTN.spinL.x = cx - 105; BTN.spinR.x = cx + 105; BTN.normal.x = BTN.jump.x = cx - 225;
+    }
+    overlayScale = (r.height / H) * dpr;
+    canvas.width = Math.round(W * overlayScale);
+    canvas.height = Math.round(H * overlayScale);
+    Scene3D.resize(r.width, r.height, W);
+  }
+
+  Scene3D.init($('#view'));
+  window.addEventListener('resize', resize);
+  resize();
+  $('#titleBest').textContent = game.best;
+  updateHud();
+
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const frameDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
+    last = now;
+    acc += frameDt;
+    if (api.hold) acc = 0;
+    while (acc >= DT) { update(DT); acc -= DT; }
+    updateHud();
+    renderScene(game.paused ? 0 : frameDt);
+    drawOverlay();
+  }
   requestAnimationFrame(frame);
 
   // テスト・デバッグ用
-  window.MS = { game, update, input, doJump, doShoot, startGame, get player() { return player; }, get keeper() { return keeper; }, get ball() { return ball; } };
+  const api = window.MS = {
+    hold: false, game, input, update, doJump, doShoot, pressJump, pressCenter: pressJump, startGame, DT,
+    get player() { return player; }, get keeper() { return keeper; }, get ball() { return ball; },
+  };
 })();
