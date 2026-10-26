@@ -1,0 +1,58 @@
+Musasabi Shoot - English source text for machine translation (Google Play store listing)
+
+This version uses short, plain sentences without idioms or slang, so that automatic translation
+into other languages stays accurate. Keep the game name "Musasabi Shoot" untranslated.
+
+[App name] (max 30 characters)
+Musasabi Shoot: Handball
+
+[Short description] (max 80 characters)
+Jump from the wing, lean in the air and beat the goalkeeper. A 3D handball game.
+
+[Full description] (max 4000 characters)
+You play handball in a full indoor arena. The referee blows the whistle. A teammate passes the ball to you.
+Jump from the wing toward the middle of the court. Lean far to the side in the air and shoot. This shot is called the "plongeon" shot. In Japan, people call it the "musasabi" (flying squirrel) shot. There are 20 shots in one game. How many goals can you score?
+
+■ CATCH THE PASS
+• Each shot starts from a different place: the right corner, the wing, or a run along the sideline.
+• The pass can be direct, a bounce pass, or a high pass.
+• Your player throws with the right hand and plays on the left wing. You attack from the right side of the screen.
+
+■ JUMP WITHIN 3 STEPS
+• The steps start when you catch the ball. A fourth step is a foul.
+• If you touch the 6-meter line, it is a foul. If you land before you shoot, you miss the chance.
+• Hold the DASH button to take longer steps and run faster.
+• Take two steps with DASH after the catch. Then the MUSASABI jump is ready.
+
+■ THE MUSASABI SHOT
+• Jump toward the middle of the court, not toward the goal. Lean in the air to make the angle wider.
+• First go up and watch the goalkeeper. Then lean late. Real players do this too.
+• After the shot, your player rolls forward on the floor.
+
+■ MANY KINDS OF SHOTS
+• In the air, use the round controller on the left to aim: high, low, left or right.
+• Shot buttons on the right: NORMAL in the center, LOOP at the top, L-SPIN on the left, R-SPIN on the right, BOUNCE at the bottom.
+• Your player swings the arm back before the throw. The throw takes a short time.
+• You can shoot on the ground, right after the jump, in the air, or while you fall.
+• Spin shots curve more when you run faster and use more steps.
+
+■ 7 TYPES OF GOALKEEPER
+• Each goalkeeper moves in a different way. Some wait, some run out, some jump wide.
+• The goalkeeper moves toward you. When the goalkeeper moves first, the game shows it.
+• If the goalkeeper runs out, use LOOP. If the goalkeeper jumps wide, use BOUNCE. If the goalkeeper falls to one side, shoot NORMAL to the other side.
+
+■ A 3D INDOOR ARENA
+• Full stands, ad boards, and a court and goal at real size.
+• The crowd cheers and confetti falls when you score.
+
+■ EASY TO PLAY
+• Turn on NAV if you need help. It shows when to jump and where to aim.
+
+■ MORE FEATURES
+• Ranks from S to D, and your best score.
+• Share your score with friends. The score shows if NAV was on.
+• If you miss a shot, you can watch an ad and take it again (up to 5 times in one game).
+• You can play offline. Ads and sharing need an internet connection.
+• English and Japanese.
+
+Jump and shoot. Can you score all 20 goals?

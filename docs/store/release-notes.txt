@@ -1,0 +1,22 @@
+<ja-JP>
+ムササビシュート、配信開始！
+・ハンドボールのサイドシュート「ムササビシュート」を再現した3Dゲーム
+・ホイッスルでパスを受けて、3歩以内に跳び込む。4歩目と6mラインは反則
+・ダッシュ2歩で「ムササビ」。空中で倒れ込んで角度を広げる
+・円形カーソルでコース、ボタンでノーマル・ループ・左右スピン・バウンド
+・7タイプのキーパー。動きを見極めて打ち分けよう
+・全20本で何点取れるか挑戦。ゴールで大歓声と紙吹雪
+・決まらなかった1本は、広告を見てやり直せる（1ゲーム5回まで）
+・ナビ機能、ランク、スコアのシェア、日本語・英語対応
+</ja-JP>
+<en-US>
+Musasabi Shoot is here!
+• A 3D handball game of the wing "plongeon" shot
+• Catch the pass and take off within 3 steps
+• Two DASH steps unlock MUSASABI: lean in the air to widen the angle
+• Aim with the ring; shoot NORMAL, LOOP, L-SPIN, R-SPIN or BOUNCE
+• 7 keeper types. Read them and pick your shot
+• 20 shots per game. Cheers and confetti for every goal
+• Watch an ad to retake a missed shot (5 per game)
+• NAV help, ranks, score sharing, English and Japanese
+</en-US>
