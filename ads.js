@@ -12,7 +12,7 @@ window.Ads = (() => {
     // (AdMob で広告ユニットを作ったら、ここに入れる)
     production: {
       interstitial: 'ca-app-pub-6411535997477460/1429215782',
-      rewarded: '',
+      rewarded: 'ca-app-pub-6411535997477460/1804620308',
       banner: 'ca-app-pub-6411535997477460/2243604007',
     },
   };
