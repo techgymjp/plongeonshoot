@@ -7,7 +7,7 @@
 techgymjp/center-fly（センターフライ）、techgymjp/jackal（ジャッカル）、techgymjp/corner-kick（コーナーキック）と揃えています。
 会場は **室内のハンドボール競技場** です（木の床、青いゴールエリア、近くて急なスタンド、天井の照明、大型ビジョン）。
 
-`index.html` をブラウザで開くだけで遊べます（ビルド不要）。3D描画に同梱の three.js（`vendor/three.min.js`, MIT License）を使っています。
+`index.html` をブラウザで開くだけで遊べます（Web 版はビルド不要）。Android アプリ版もあります（下記）。3D描画に同梱の three.js（`vendor/three.min.js`, MIT License）を使っています。
 GitHub Pages などの静的ホスティングにそのまま置けます。
 
 ## ムササビシュートとは
@@ -159,6 +159,43 @@ GitHub Pages などの静的ホスティングにそのまま置けます。
 
 ベスト記録とナビの設定はブラウザに保存されます。
 
+## Android アプリ
+
+[Capacitor](https://capacitorjs.com/) でゲームのファイルをアプリに同梱し、Android アプリにしています（オフラインで遊べます）。
+構成は techgymjp/jet-fighter の `docs/ANDROID_PORTING.md`、techgymjp/corner-kick と同じです。
+
+- パッケージ名: `jp.techgym.plongeonshoot`
+- アプリ名: ムササビシュート（英語の端末では Musasabi Shoot）
+- 横画面固定・全画面・プレイ中は画面を消さない
+- 戻るボタン: プレイ中は一時停止（ポーズ中なら再開）、遊び方の画面ではタイトルへ、タイトル・結果画面ではアプリを終了
+- 別アプリに切り替えると自動で一時停止して音を止める
+- シェアは Android の共有メニュー
+- 広告（AdMob）
+  - バナー: タイトル・遊び方・ポーズ・結果画面の下中央だけ（プレイ中は操作ボタンと重なるので出さない）
+  - 全画面広告（インタースティシャル）: プレイを始める（タイトルから）、タイトルに戻る（遊び方・ポーズ・結果から）、ポーズからの再開、結果画面の「もう一度」のたびに毎回
+  - リワード広告（チート）: 決まらなかった1本（セーブ・ポスト・枠外・反則）のあと「広告を見てこの1本をやり直す」（1 ゲーム 5 回まで。失敗の様子を見届けられるよう 2.2 秒後に出し、6 秒で自動的に次の1本へ）。
+    最後まで見ると、その1本の成績を取り消して、同じ開始位置・キーパー・パスでもう一度（1本ごとに乱数の種をゲームの種から作って再現）。
+    使ったことは結果画面とシェア文に「やり直しN回」と出る
+  - EU など同意が必要な地域ではタイトル画面に「広告の設定」
+- タイトル画面にバージョン（ビルド番号）とプライバシーポリシーへのリンク
+
+ビルドは GitHub Actions（`.github/workflows/android.yml`）で行います。
+
+1. `npm ci` → `npm run build`（`www/` に Web ファイルをコピーし、`ads-config.js` と `build-info.js` を生成）→ `npx cap sync android` → `./gradlew assembleDebug`
+2. 既定ブランチなら、Release `android-latest` の `plongeonshoot.apk` を差し替え（動作確認用・テスト広告）
+   - リリース画面: https://github.com/techgymjp/plongeonshoot/releases/tag/android-latest （QR コード: `docs/apk-qr.png`）
+   - APK 直接: https://github.com/techgymjp/plongeonshoot/releases/latest/download/plongeonshoot.apk
+
+   ![リリース画面の QR コード](docs/apk-qr.png)
+3. GitHub Secrets に署名鍵（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD`）があれば、本番広告で署名付き AAB を作り Artifact に上げる
+
+AdMob のアプリ ID は `android/app/src/main/res/values/strings.xml` の `admob_app_id`、本番の広告ユニット ID は `ads.js` の `UNITS.production` にあります
+（届くまではアプリ ID は Google 公式のテスト用、本番の広告ユニットは空。空の種類は本番ビルドでは出さない）。
+動作確認用 APK はどれもテスト広告、Google Play 用の AAB は本番の広告です。
+
+手元で試すとき: `npm install` → `npm run android:sync` → `npm run android:open`（Android Studio が必要）。
+アイコンと起動画面は `assets/` の元画像から `npx @capacitor/assets generate --android` で生成しています。
+
 ## ファイル
 
 | ファイル | 内容 |
@@ -168,9 +205,19 @@ GitHub Pages などの静的ホスティングにそのまま置けます。
 | `style.css` | 見た目 |
 | `game.js` | ゲームの進行・選手とキーパーの動き・パス・ボールの物理・入力・2Dの表示（方角リング・ボタン）・音・シェア |
 | `scene3d.js` | 3D 描画（室内競技場・ゴールとネット・選手・ボール・紙吹雪・カメラ） |
+| `ads.js` | 広告（Android アプリのときだけ動く） |
 | `vendor/three.min.js` | three.js（MIT License） |
+| `android/` | Android アプリのプロジェクト（Capacitor） |
+| `scripts/build-web.js` | Android アプリに同梱する Web ファイルを `www/` にまとめる |
+| `assets/` | アイコンと起動画面の元画像 |
 
-テスト用に `window.MS`（`update(dt)`、`pressCenter()`、`doShoot(type)`、`input` など）を公開しています。
+テスト用に `window.MS`（`update(dt)`、`pressJump()`、`doShoot(type)`、`input` など）を公開しています。
+
+## ライセンス
+
+著作権はテックジム株式会社に帰属します（All rights reserved）。許可なく複製・改変・再配布すること、Web サイトやアプリとして公開・販売すること、名前・ロゴ・アイコン・画像を使うことを禁止します。
+テックジムの受講生が学習目的で複製・改変することは許可しますが、アプリストアでの公開・広告の掲載・販売などの商用利用は禁止し、著作権表示を残してください。
+同梱の three.js は MIT License です。詳しくは [LICENSE](LICENSE) を見てください。
 
 ## Claude Code から GitHub にプッシュするための設定
 

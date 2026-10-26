@@ -23,12 +23,17 @@ window.I18N = (() => {
       'result.score': '{s} 点 ／ {g} / {t} ゴール（{nav}）',
       'result.newRecord': 'ベスト記録更新！',
       'result.best': 'ベスト {b} 点',
-      'nav.on': 'ナビあり', 'nav.off': 'ナビなし',
+      'nav.on': 'ナビあり', 'nav.off': 'ナビなし', 'nav.redo': '・やり直し{n}回',
+      'legal.privacy': 'プライバシーポリシー', 'legal.privacyUrl': 'https://techgym.jp/privacy-policy/', 'legal.adSettings': '広告の設定',
+      'redo.watch': '▶ 広告を見てこの1本をやり直す', 'redo.next': 'つぎへ（{s}）', 'redo.loading': '広告を読み込み中…',
+      'redo.note': '決まらなかった1本を、同じ形でもう一度（このゲームであと{n}回 / {max}回まで）',
+      'redo.fail': '広告を読み込めませんでした。つぎへ進みます',
       'pause.title': 'PAUSE',
 
       'share.btn': '📤 結果をシェア', 'share.post': '𝕏 ポスト', 'share.copy': 'コピー',
       'share.title': 'ムササビシュート',
       'share.msg.image': '成績画像つきでシェアできます',
+      'share.msg.native': '共有メニューからシェアできます', 'share.dialog': '結果をシェア',
       'share.msg.links': 'X・LINE・コピーからシェアしてください',
       'share.copied': '結果をコピーしました！SNSに貼り付けてください',
       'share.copyFail': 'コピーできませんでした。X・LINEボタンを使ってください',
@@ -121,12 +126,17 @@ window.I18N = (() => {
       'result.score': '{s} pts / {g} of {t} goals ({nav})',
       'result.newRecord': 'New best!',
       'result.best': 'Best {b} pts',
-      'nav.on': 'NAV on', 'nav.off': 'NAV off',
+      'nav.on': 'NAV on', 'nav.off': 'NAV off', 'nav.redo': ', {n} redo(s)',
+      'legal.privacy': 'Privacy Policy', 'legal.privacyUrl': 'https://techgym.jp/privacy-policy-en/', 'legal.adSettings': 'Ad settings',
+      'redo.watch': '▶ Watch an ad to retake this shot', 'redo.next': 'Next ({s})', 'redo.loading': 'Loading the ad…',
+      'redo.note': 'Retake the shot you missed, exactly the same ({n} of {max} left this game)',
+      'redo.fail': 'Could not load the ad. Moving on',
       'pause.title': 'PAUSE',
 
       'share.btn': '📤 Share result', 'share.post': '𝕏 Post', 'share.copy': 'Copy',
       'share.title': 'Musasabi Shoot',
       'share.msg.image': 'Share with a result card image',
+      'share.msg.native': 'Share from the share menu', 'share.dialog': 'Share result',
       'share.msg.links': 'Share via X, LINE or copy',
       'share.copied': 'Copied! Paste it into your social media',
       'share.copyFail': 'Could not copy. Please use the X or LINE button',
@@ -220,6 +230,8 @@ window.I18N = (() => {
     document.title = t('doc.title');
     root.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
     root.querySelectorAll('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+    const pl = document.getElementById('privacyLink');
+    if (pl) pl.href = t('legal.privacyUrl');
   }
   function set(l) {
     if (!DICT[l]) return;

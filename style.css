@@ -171,3 +171,26 @@ html, body {
   #share .sbtn { padding: 5px 8px; font-size: 12px; }
   #share .sbtn.main { font-size: 14px; }
 }
+
+/* ---------- タイトルの下: バージョン・プライバシーポリシー・広告の設定 ---------- */
+#legal { margin-top: 10px; font-size: 12px; color: #b0bec5; }
+#legal a { color: #cfe8ff; }
+#legal [hidden] { display: none; }
+#buildInfo { margin-right: 10px; opacity: .8; }
+#buildInfo:empty { display: none; }
+
+/* ---------- 決まらなかった1本のやり直し(リワード広告。アプリのみ) ---------- */
+#redo {
+  position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(560px, 80%);
+  display: none; z-index: 5; padding: 10px 12px 12px; border-radius: 14px;
+  background: rgba(8, 14, 28, .86); color: #e6eef8; text-align: center;
+}
+#redo.show { display: block; }
+#redo p { margin: 0 0 8px; font-size: 14px; }
+#redo .row { display: flex; gap: 8px; }
+#redo .sbtn {
+  flex: 1; border: 0; border-radius: 10px; padding: 9px 10px; font: inherit; font-weight: 800; font-size: 15px;
+  cursor: pointer; background: #dfe7f7; color: #1b2440;
+}
+#redo .sbtn.main { flex: 2; background: linear-gradient(#7dffb0, #1fbf63); color: #04210f; }
+#redo .sbtn:disabled { opacity: .6; }

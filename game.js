@@ -15,6 +15,9 @@
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const t = I18N.t;
   const SHARE_URL = 'https://techgym.jp/column/claude-code-game-plongeonshoot/';
+  // Android アプリ(Capacitor)のときだけネイティブの機能を使う。Web 版では何もしない
+  const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const plugin = (name) => (NATIVE && window.Capacitor.Plugins ? window.Capacitor.Plugins[name] : null);
 
   // ================= 定数 =================
   const GOAL_HW = 1.5;          // ゴール半幅 (m)
@@ -87,21 +90,33 @@
   };
 
   // ================= ユーティリティ =================
-  const rand = (a, b) => a + Math.random() * (b - a);
+  // 乱数: 1本ごとに種を決める(リワード広告で同じ1本をやり直すときに、同じ配置・同じ乱数で再現するため)
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let rng = Math.random;
+  const rand = (a, b) => a + rng() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   function gauss() {
     let u = 0, v = 0;
-    while (!u) u = Math.random();
-    while (!v) v = Math.random();
+    while (!u) u = rng();
+    while (!v) v = rng();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
   function weighted(obj) {
     let sum = 0;
     for (const k in obj) sum += obj[k];
-    let r = Math.random() * sum;
+    let r = rng() * sum;
     for (const k in obj) { r -= obj[k]; if (r <= 0) return k; }
     return Object.keys(obj)[0];
   }
@@ -445,6 +460,9 @@
 
   function newAttempt() {
     game.shotNo++;
+    // この1本の乱数(ゲームの種から作る)と、やり直し用に1本前の成績を控える
+    rng = mulberry32((game.seed + game.shotNo * 7919) >>> 0);
+    game.snap = { score: game.score, goals: game.goals, combo: game.combo, bestCombo: game.bestCombo, musaGoals: game.musaGoals, hist: game.history.length };
     const spot = pick(START_SPOTS);
     const x = rand(spot.x[0], spot.x[1]), z = rand(spot.z[0], spot.z[1]);
     const path = spot.path.map(([px, pz]) => [px + rand(-0.4, 0.4), pz + rand(-0.4, 0.4)]);
@@ -479,7 +497,9 @@
     initAudio();
     goLandscape();
     game.score = 0; game.shotNo = 0; game.goals = 0; game.combo = 0; game.history = [];
-    game.bestCombo = 0; game.musaGoals = 0;
+    game.bestCombo = 0; game.musaGoals = 0; game.redoUsed = 0;
+    game.seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    closeRedo();
     game.paused = false; game.newRecord = false;
     $('#title').classList.remove('show');
     $('#help').classList.remove('show');
@@ -521,7 +541,10 @@
   }
 
   function rankOf(s) { return s >= 6800 ? 'S' : s >= 4400 ? 'A' : s >= 2400 ? 'B' : s >= 1000 ? 'C' : 'D'; }
-  function navLabel() { return t(game.nav ? 'nav.on' : 'nav.off'); }
+  function navLabel() {
+    const r = game.redoUsed || 0;
+    return t(game.nav ? 'nav.on' : 'nav.off') + (r ? t('nav.redo', { n: r }) : '');
+  }
   function endGame() {
     game.phase = 'over';
     const s = game.score;
@@ -551,7 +574,7 @@
     const text = shareText();
     $('#shareX').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(SHARE_URL);
     $('#shareLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(withUrl(text));
-    $('#shareMsg').textContent = t(navigator.share ? 'share.msg.image' : 'share.msg.links');
+    $('#shareMsg').textContent = t(NATIVE ? 'share.msg.native' : navigator.share ? 'share.msg.image' : 'share.msg.links');
   }
   // 成績カード画像(1200x630)。室内の競技場らしく、木の床と紙吹雪
   function makeShareImage() {
@@ -594,6 +617,12 @@
   }
   async function shareResult() {
     const text = shareText();
+    // アプリでは Android の共有メニューを出す
+    const nativeShare = plugin('Share');
+    if (nativeShare) {
+      try { await nativeShare.share({ title: t('share.title'), text, url: SHARE_URL, dialogTitle: t('share.dialog') }); } catch (e) { /* キャンセル */ }
+      return;
+    }
     if (navigator.share) {
       try {
         const blob = await makeShareImage();
@@ -626,6 +655,7 @@
     game.phase = 'result';
     game.waitT = ok ? 3.2 : 2.6;
     game.history.push(Object.assign({ ok }, rec));
+    if (!ok) offerRedo();
     updateHud();
   }
   function shotLabel(timing, type) { return t('shot.label', { timing: t('timing.' + timing), type: t('shot.' + type) }); }
@@ -1005,12 +1035,12 @@
     if (k.committed) delay += 0.1;
     const lob = py > 1.9; // 頭の上を越えるボールかどうかは、読み違えない
     // 読み違い
-    if (!k.committed && Math.random() < 0.22) { px += rand(-0.8, 0.8); py = rand(0.2, 2.0); }
+    if (!k.committed && rng() < 0.22) { px += rand(-0.8, 0.8); py = rand(0.2, 2.0); }
     // ループ用: 下がった先(ゴールライン付近)でボールが通る横位置
     const RD = 0.35, rax = (k.ox || 0) + sf * RD, raz = Math.max(0.25, cf * RD);
     const tl = clamp((ball.z - raz) / Math.max(0.1, -ball.vz), 0, 3);
     const lobX = (ball.x + ball.vx * tl - rax) * cf - (ball.z + ball.vz * tl - raz) * sf;
-    k.react = { x: px, y: py, lob, lobX: lobX + (Math.random() < 0.22 ? rand(-0.6, 0.6) : 0) };
+    k.react = { x: px, y: py, lob, lobX: lobX + (rng() < 0.22 ? rand(-0.6, 0.6) : 0) };
     k.reactAt = k.t + delay;
   }
 
@@ -1052,7 +1082,7 @@
         k.feintT -= dt;
         if (k.feintT <= 0) {
           k.feintT = rand(0.45, 0.9);
-          k.feintX = k.feintX ? 0 : (Math.random() < 0.5 ? -0.6 : 0.6);
+          k.feintX = k.feintX ? 0 : (rng() < 0.5 ? -0.6 : 0.6);
           k.stance = k.feintX ? (k.feintX < 0 ? 'lowL' : 'lowR') : 'ready';
         }
         toff = k.feintX;
@@ -1074,7 +1104,7 @@
         const off = r.x - k.off;
         if (r.lob) k.stance = 'leap';
         else if (r.y < 0.55) k.stance = Math.abs(off) > 0.5 ? (off < 0 ? 'lowL' : 'lowR') : 'low';
-        else if (Math.abs(off) > 0.65 && Math.random() < 0.6) k.stance = off < 0 ? 'diveL' : 'diveR';
+        else if (Math.abs(off) > 0.65 && rng() < 0.6) k.stance = off < 0 ? 'diveL' : 'diveR';
         else k.stance = r.y > 1.45 ? 'high' : 'ready';
         // 頭の上を越えるボール(ループ)は、ゴールライン側へ下がりながらジャンプして手を伸ばす。前に飛び出していると戻りが遅い
         if (r.lob) {
@@ -1610,7 +1640,7 @@
   }
 
   // ダッシュ中: 画面の左右に流れる線
-  const speedLines = Array.from({ length: 26 }, () => ({ y: Math.random(), x: Math.random(), l: rand(60, 160), s: rand(1.6, 3) }));
+  const speedLines = Array.from({ length: 26 }, () => ({ y: Math.random(), x: Math.random(), l: 60 + Math.random() * 100, s: 1.6 + Math.random() * 1.4 }));
   function drawSpeedLines() {
     const p = player;
     if (!p || p.state !== 'run' || !input.dash || game.phase !== 'play') return;
@@ -1681,22 +1711,114 @@
   }
   $('#navBtn').addEventListener('click', toggleNav);
   $('#muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
-  $('#startBtn').addEventListener('click', startGame);
-  $('#helpBtn').addEventListener('click', () => { $('#title').classList.remove('show'); $('#help').classList.add('show'); $('#help').scrollTop = 0; });
-  $('#helpBack').addEventListener('click', () => { $('#help').classList.remove('show'); $('#title').classList.add('show'); });
+  // 画面の移り変わり。広告の基本ルールに合わせ、プレイを始める・タイトルに戻る・ポーズから再開・もう一度 のたびに全画面広告(アプリのみ)
+  let adBusy = false;
+  async function withInterstitial(next) {
+    if (adBusy) return;
+    if (window.Ads && Ads.available) {
+      adBusy = true;
+      updateBanner();
+      await Ads.showInterstitial(3000);
+      adBusy = false;
+    }
+    next();
+  }
+  function openHelp() { $('#title').classList.remove('show'); $('#help').classList.add('show'); $('#help').scrollTop = 0; }
+  function helpToTitle() { withInterstitial(() => { $('#help').classList.remove('show'); $('#title').classList.add('show'); }); }
+  $('#startBtn').addEventListener('click', () => { initAudio(); withInterstitial(startGame); });
+  $('#helpBtn').addEventListener('click', openHelp);
+  $('#helpBack').addEventListener('click', helpToTitle);
   document.querySelectorAll('.langBtn').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
   $('#shareBtn').addEventListener('click', () => { initAudio(); shareResult(); });
   $('#shareCopy').addEventListener('click', copyResult);
-  $('#retryBtn').addEventListener('click', startGame);
-  $('#titleBtn').addEventListener('click', goTitle);
-  $('#resumeBtn').addEventListener('click', togglePause);
-  $('#pauseTitleBtn').addEventListener('click', goTitle);
+  $('#retryBtn').addEventListener('click', () => withInterstitial(startGame));
+  $('#titleBtn').addEventListener('click', () => withInterstitial(goTitle));
+  $('#resumeBtn').addEventListener('click', () => withInterstitial(() => { if (game.paused) togglePause(); }));
+  $('#pauseTitleBtn').addEventListener('click', () => withInterstitial(goTitle));
+
+  // Android の戻るボタン: プレイ中はポーズ(ポーズ中なら再開)、遊び方はタイトルへ、タイトル・結果画面ではアプリを閉じる
+  if (plugin('App')) {
+    plugin('App').addListener('backButton', () => {
+      if (adBusy) return;
+      if ($('#help').classList.contains('show')) helpToTitle();
+      else if (game.phase === 'title' || game.phase === 'over') plugin('App').exitApp();
+      else if (game.paused) withInterstitial(() => { if (game.paused) togglePause(); });
+      else togglePause();
+    });
+  }
+
+  // ---------- リワード広告のチート: 決まらなかった1本をやり直す(アプリのみ・1ゲーム5回まで) ----------
+  // 外したら「広告を見てこの1本をやり直す」を出す。最後まで見たら、その1本の成績を取り消して、同じ開始位置・キーパー・パスでもう一度。
+  // 失敗の様子(ボールの行方)を見届けられるよう、少し待ってから出し、数秒で自動的に先へ進める
+  const REDO_DELAY = 2.2, REDO_WAIT = 6, REDO_MAX = 5;
+  const redo = { active: false, busy: false, t: 0, pending: 0 };
+  function offerRedo() {
+    if (!window.Ads || !Ads.canReward || (game.redoUsed || 0) >= REDO_MAX) return;
+    redo.pending = REDO_DELAY;
+  }
+  function showRedo() {
+    Object.assign(redo, { active: true, busy: false, t: REDO_WAIT, pending: 0 });
+    $('#redoWatch').disabled = false;
+    $('#redoWatch').textContent = t('redo.watch');
+    $('#redoNote').textContent = t('redo.note', { n: REDO_MAX - (game.redoUsed || 0), max: REDO_MAX });
+    $('#redo').classList.add('show');
+  }
+  function closeRedo() {
+    redo.active = false; redo.pending = 0;
+    $('#redo').classList.remove('show');
+  }
+  function updateRedo(dt) {
+    if (game.paused) return;
+    if (redo.pending > 0) { redo.pending -= dt; if (redo.pending <= 0) showRedo(); return; }
+    if (!redo.active || redo.busy) return;
+    redo.t -= dt;
+    $('#redoNext').textContent = t('redo.next', { s: Math.max(0, Math.ceil(redo.t)) });
+    if (redo.t <= 0) closeRedo();
+  }
+  $('#redoNext').addEventListener('click', closeRedo);
+  $('#redoWatch').addEventListener('click', async () => {
+    if (!redo.active || redo.busy) return;
+    redo.busy = true;
+    $('#redoWatch').disabled = true;
+    $('#redoWatch').textContent = t('redo.loading');
+    const result = await Ads.showRewarded();
+    if (!redo.active) return;
+    if (result === 'unavailable') { $('#redoNote').textContent = t('redo.fail'); setTimeout(closeRedo, 2000); return; }
+    closeRedo();
+    if (result !== 'rewarded') return;
+    // 決まらなかった1本の成績を取り消して、同じ1本をもう一度
+    const sn = game.snap;
+    Object.assign(game, { score: sn.score, goals: sn.goals, combo: sn.combo, bestCombo: sn.bestCombo, musaGoals: sn.musaGoals });
+    game.history.length = sn.hist;
+    game.shotNo--;
+    game.redoUsed = (game.redoUsed || 0) + 1;
+    Scene3D.clearConfetti();
+    newAttempt();
+  });
+
+  // ---------- バナー広告: タイトル・遊び方・ポーズ・結果画面だけ(プレイ中は操作ボタンと重なるので出さない) ----------
+  function updateBanner() {
+    if (!window.Ads) return;
+    const help = $('#help').classList.contains('show');
+    // 全画面広告の前後(画面が切り替わる途中)はバナーを出さない(閉じた直後に一瞬出てすぐ消えるのを防ぐ)
+    Ads.setBanner(!adBusy && (game.phase === 'title' || game.phase === 'over' || game.paused || help));
+  }
+
+  // タイトル画面の下: バージョン(アプリ版)・プライバシーポリシー・広告の設定(EU など同意が必要な地域だけ)
+  if (window.APP_VERSION && window.APP_VERSION !== 'dev') $('#buildInfo').textContent = window.APP_VERSION;
+  if (window.Ads) Ads.initDone.then(() => { if (Ads.privacyOptionsRequired) $('#adPrivacy').hidden = false; });
+  $('#adPrivacyLink').addEventListener('click', (e) => { e.preventDefault(); if (window.Ads) Ads.showPrivacyOptions(); });
+  // 広告(ads.js)が全画面広告を出している間は音を止める
+  window.Sound = {
+    suspend() { if (AC) AC.suspend(); },
+    resume() { if (AC && !document.hidden) AC.resume(); },
+  };
   // 裏に回ったら一時停止して音を止める
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if ((game.phase === 'play' || game.phase === 'result') && !game.paused) togglePause();
       if (AC) AC.suspend();
-    } else if (AC) AC.resume();
+    } else if (AC && !(window.Ads && Ads.showing)) AC.resume();
   });
 
   // ================= メインループ =================
@@ -1713,7 +1835,8 @@
       if (ball) updateBall(dt);
       updateNav();
     }
-    if (game.phase === 'result') {
+    updateRedo(dt);
+    if (game.phase === 'result' && !redo.active && !(redo.pending > 0)) {
       game.waitT -= dt;
       if (game.waitT <= 0) {
         if (game.shotNo >= TOTAL_SHOTS) endGame();
@@ -1810,6 +1933,7 @@
     if (api.hold) acc = 0;
     while (acc >= DT) { update(DT); acc -= DT; }
     updateHud();
+    updateBanner();
     renderScene(game.paused ? 0 : frameDt);
     drawOverlay();
   }

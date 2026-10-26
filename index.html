@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ムササビシュート</title>
+<meta name="theme-color" content="#10121a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -42,6 +46,11 @@
         <button class="langBtn" type="button" data-lang="ja">日本語</button>
         <button class="langBtn" type="button" data-lang="en">English</button>
       </div>
+      <div id="legal">
+        <span id="buildInfo"></span>
+        <a id="privacyLink" href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener" data-i18n="legal.privacy">プライバシーポリシー</a>
+        <span id="adPrivacy" hidden>｜<a href="#" id="adPrivacyLink" data-i18n="legal.adSettings">広告の設定</a></span>
+      </div>
     </div>
   </div>
 
@@ -75,6 +84,15 @@
     </div>
   </div>
 
+  <!-- 決まらなかった1本のやり直し(アプリのみ・リワード広告) -->
+  <div id="redo">
+    <p id="redoNote"></p>
+    <div class="row">
+      <button id="redoWatch" class="sbtn main" type="button"></button>
+      <button id="redoNext" class="sbtn" type="button"></button>
+    </div>
+  </div>
+
   <!-- 一時停止 -->
   <div id="pause" class="overlay">
     <div class="panel small">
@@ -87,6 +105,9 @@
 </div>
 <script src="vendor/three.min.js"></script>
 <script src="i18n.js"></script>
+<script src="ads-config.js"></script>
+<script src="build-info.js"></script>
+<script src="ads.js"></script>
 <script src="scene3d.js"></script>
 <script src="game.js"></script>
 </body>

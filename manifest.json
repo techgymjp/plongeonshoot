@@ -1,0 +1,9 @@
+{
+  "name": "ムササビシュート",
+  "short_name": "ムササビシュート",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#10121a",
+  "theme_color": "#10121a"
+}

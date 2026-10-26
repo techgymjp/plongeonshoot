@@ -1,0 +1,8 @@
+{
+  "appId": "jp.techgym.plongeonshoot",
+  "appName": "ムササビシュート",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#10121a"
+  }
+}
