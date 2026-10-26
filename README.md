@@ -190,7 +190,7 @@ GitHub Pages などの静的ホスティングにそのまま置けます。
 3. GitHub Secrets に署名鍵（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD`）があれば、本番広告で署名付き AAB を作り Artifact に上げる
 
 AdMob のアプリ ID は `android/app/src/main/res/values/strings.xml` の `admob_app_id`、本番の広告ユニット ID は `ads.js` の `UNITS.production` にあります
-（届くまではアプリ ID は Google 公式のテスト用、本番の広告ユニットは空。空の種類は本番ビルドでは出さない）。
+（本番の広告ユニットが空の種類は、本番ビルドでは出さない）。
 動作確認用 APK はどれもテスト広告、Google Play 用の AAB は本番の広告です。
 
 手元で試すとき: `npm install` → `npm run android:sync` → `npm run android:open`（Android Studio が必要）。
