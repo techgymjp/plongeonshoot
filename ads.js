@@ -11,7 +11,7 @@ window.Ads = (() => {
     // 本番の広告ユニット(AdMob の「ムササビシュート」)。空の種類は本番ビルド(Google Play 用)では出さない
     // (AdMob で広告ユニットを作ったら、ここに入れる)
     production: {
-      interstitial: '',
+      interstitial: 'ca-app-pub-6411535997477460/1429215782',
       rewarded: '',
       banner: 'ca-app-pub-6411535997477460/2243604007',
     },
