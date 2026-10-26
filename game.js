@@ -1773,9 +1773,14 @@
     if (!redo.active || redo.busy) return;
     redo.t -= dt;
     $('#redoNext').textContent = t('redo.next', { s: Math.max(0, Math.ceil(redo.t)) });
-    if (redo.t <= 0) closeRedo();
+    if (redo.t <= 0) skipRedo();
   }
-  $('#redoNext').addEventListener('click', closeRedo);
+  // やり直さない → 失敗の表示はパネルの前に済んでいるので、すぐ次の1本へ
+  function skipRedo() {
+    closeRedo();
+    if (game.phase === 'result') game.waitT = Math.min(game.waitT, 0.35);
+  }
+  $('#redoNext').addEventListener('click', skipRedo);
   $('#redoWatch').addEventListener('click', async () => {
     if (!redo.active || redo.busy) return;
     redo.busy = true;
