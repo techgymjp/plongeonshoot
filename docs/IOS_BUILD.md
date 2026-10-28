@@ -197,7 +197,7 @@ JET STRIKE と同じく、push するだけで GitHub Actions（GitHub の Mac �
 | 実行先に iPhone が出ない | ケーブルをつなぎ直し、iPhone で「信頼」を許可。デベロッパモードをオンにする |
 | 実行先に「iOS 26.x Not Installed」と出る | 「Get」で iOS のシミュレーターと部品をダウンロードする（8 GB ほど。Archive にも必要） |
 | ビルドが古いゲームのまま | `npm run ios:sync`（または `ios:release`）を実行し忘れている。`git pull` してから実行し直す |
-| 広告が出ない（本番ビルド） | AdMob の iOS 用 ID がまだ入っていない（`ads.js` の `UNITS.ios.production` が空）。ID を Claude Code に渡す |
+| 広告が出ない（本番ビルド） | AdMob で広告ユニットを消して作り直していないか確かめる。作り直したら新しい ID を Claude Code に渡す（`ads.js` の `UNITS.ios.production`） |
 | ビルドを選ぼうとしても、アップロードしたビルドが出てこない | バージョンのページの「バージョン」が 1.0 のまま。1.0.0 に直して保存する |
 | 「審査用に追加できません」 | 「コンテンツの配信権」と「アプリのプライバシー」のプライバシーポリシー URL を入力したか確かめる |
 | 初回の審査で「Guideline 2.1 - Information Needed」 | 審査メモ（5 章）と 4 章の録画を App Review への返信で送り、同じ文をバージョンのページの「メモ」にも入れる |
