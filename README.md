@@ -207,7 +207,7 @@ Mac での作業手順（ビルド・アップロード・審査）は [`docs/IO
 - 起動時、広告の同意確認のあとに「トラッキングの許可」（App Tracking Transparency）の確認を出す（日英）
 - シェアは iOS の共有シート
 
-AdMob の iOS 用アプリ ID は `ios/App/App/Info.plist` の `GADApplicationIdentifier` にあります（本番の ID を入れるまでは Google のテスト用 ID）。
+AdMob の iOS 用アプリ ID は `ios/App/App/Info.plist` の `GADApplicationIdentifier` にあります。
 `.github/workflows/ios.yml` が、push のたびに Mac の環境で署名なしのビルドが通るかを確かめます。
 App Store 用の画像は `docs/store/ios/` にあります。
 
