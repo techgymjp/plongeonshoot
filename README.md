@@ -196,6 +196,21 @@ AdMob のアプリ ID は `android/app/src/main/res/values/strings.xml` の `adm
 手元で試すとき: `npm install` → `npm run android:sync` → `npm run android:open`（Android Studio が必要）。
 アイコンと起動画面は `assets/` の元画像から `npx @capacitor/assets generate --android` で生成しています。
 
+## iOS アプリ
+
+Android 版と同じ Capacitor のプロジェクトに `ios/` を足して作っています。構成は techgymjp/jet-fighter（JET STRIKE）の iOS 版と同じです。
+Mac での作業手順（ビルド・アップロード・審査）は [`docs/IOS_BUILD.md`](docs/IOS_BUILD.md) にあります。
+
+- Bundle ID: `jp.techgym.plongeonshoot`（Android のパッケージ名と同じ）
+- iPhone 専用（iPad では iPhone 用の画面で動く）・横画面固定・全画面・プレイ中は画面を消さない
+- 広告は Android と同じ出し方。AdMob では iOS を別のアプリとして登録するので、広告ユニットは `ads.js` の `UNITS.ios` に分けてある
+- 起動時、広告の同意確認のあとに「トラッキングの許可」（App Tracking Transparency）の確認を出す（日英）
+- シェアは iOS の共有シート
+
+AdMob の iOS 用アプリ ID は `ios/App/App/Info.plist` の `GADApplicationIdentifier` にあります（本番の ID を入れるまでは Google のテスト用 ID）。
+`.github/workflows/ios.yml` が、push のたびに Mac の環境で署名なしのビルドが通るかを確かめます。
+App Store 用の画像は `docs/store/ios/` にあります。
+
 ## ファイル
 
 | ファイル | 内容 |
@@ -205,10 +220,11 @@ AdMob のアプリ ID は `android/app/src/main/res/values/strings.xml` の `adm
 | `style.css` | 見た目 |
 | `game.js` | ゲームの進行・選手とキーパーの動き・パス・ボールの物理・入力・2Dの表示（方角リング・ボタン）・音・シェア |
 | `scene3d.js` | 3D 描画（室内競技場・ゴールとネット・選手・ボール・紙吹雪・カメラ） |
-| `ads.js` | 広告（Android アプリのときだけ動く） |
+| `ads.js` | 広告（Android / iOS アプリのときだけ動く） |
 | `vendor/three.min.js` | three.js（MIT License） |
 | `android/` | Android アプリのプロジェクト（Capacitor） |
-| `scripts/build-web.js` | Android アプリに同梱する Web ファイルを `www/` にまとめる |
+| `ios/` | iOS アプリのプロジェクト（Capacitor。Mac の Xcode で開く） |
+| `scripts/build-web.js` | アプリに同梱する Web ファイルを `www/` にまとめる |
 | `assets/` | アイコンと起動画面の元画像 |
 
 テスト用に `window.MS`（`update(dt)`、`pressJump()`、`doShoot(type)`、`input` など）を公開しています。

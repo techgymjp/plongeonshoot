@@ -85,7 +85,7 @@ html, body {
 }
 .panel h1 {
   margin: 4px 0 8px; font-size: clamp(32px, 8vw, 52px); color: #ffd84a;
-  -webkit-text-stroke: 1px #6b3b00; letter-spacing: .06em;
+  -webkit-text-stroke: 2px #6b3b00; paint-order: stroke fill; letter-spacing: .06em;
 }
 .panel h2 { margin: 4px 0; font-size: 28px; }
 .lead { margin: 4px 0 10px; font-size: 16px; line-height: 1.5; }
