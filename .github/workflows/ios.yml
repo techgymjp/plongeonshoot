@@ -24,12 +24,19 @@ concurrency:
   group: ios-${{ github.ref }}
   cancel-in-progress: true
 
+# pipefail を付けて、xcodebuild | tail で失敗が隠れないようにする
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 45
     env:
       TEAM_ID: GNM3VTX9YG
+      BUNDLE_ID: jp.techgym.plongeonshoot
+      PROFILE_NAME: plongeonshoot App Store (CI)
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +63,7 @@ jobs:
           if [ -n "$P12" ] && [ -n "$KEY_ID" ] && [ -n "$ISSUER" ] && [ -n "$P8" ] \
              && [ "$GITHUB_REF" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
             echo "upload=true" >> "$GITHUB_OUTPUT"
-            echo "TestFlight にアップロードします（ビルド番号 $BUILD_NUMBER）"
+            echo "TestFlight にアップロードします（ビルド番号 ${BUILD_NUMBER}）"
           else
             echo "upload=false" >> "$GITHUB_OUTPUT"
             echo "署名なしのビルド確認だけを行います"
@@ -104,20 +111,25 @@ jobs:
           rm "$RUNNER_TEMP/dist.p12"
           echo "$P8" | base64 --decode > "$RUNNER_TEMP/AuthKey_$KEY_ID.p8"
 
+      # 開発用の証明書は作らず（アカウントの上限に当たる）、配布用のプロファイルを API で作って手動署名にする
+      - name: Create the App Store provisioning profile
+        if: steps.mode.outputs.upload == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          node scripts/asc-profile.js "$BUNDLE_ID" "$PROFILE_NAME" "$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          # App ターゲットだけを手動署名にする（コマンドラインで渡すと Swift Package のターゲットにも効いてしまう）
+          sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual; CODE_SIGN_IDENTITY = \"Apple Distribution\"; PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";/" ios/App/App.xcodeproj/project.pbxproj
+          grep -n "CODE_SIGN_STYLE" ios/App/App.xcodeproj/project.pbxproj
+
       - name: Archive
         if: steps.mode.outputs.upload == 'true'
         working-directory: ios/App
-        env:
-          KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild -project App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/AuthKey_$KEY_ID.p8" \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             archive | tail -60
 
       - name: Upload to App Store Connect (TestFlight)
@@ -134,7 +146,10 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>upload</string>
             <key>teamID</key><string>$TEAM_ID</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict>
             <key>uploadSymbols</key><true/>
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
@@ -146,7 +161,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey_$KEY_ID.p8" \
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" | tail -40
-          echo "アップロードしました（Version $(node -p "require('./package.json').version")、ビルド $BUILD_NUMBER）。10〜30 分ほどで TestFlight に出ます"
+          echo "アップロードしました（Version $(node -p "require('./package.json').version")、ビルド ${BUILD_NUMBER}）。10〜30 分ほどで TestFlight に出ます"
 
       - name: Clean up the keychain and key
         if: always() && steps.mode.outputs.upload == 'true'
