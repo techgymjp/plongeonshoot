@@ -25,7 +25,7 @@ window.Ads = (() => {
       },
       // 本番の広告ユニット(AdMob の「ムササビシュート」iOS)。空の種類は本番ビルド(App Store 用)では出さない
       production: {
-        interstitial: '',
+        interstitial: 'ca-app-pub-6411535997477460/3962176093',
         rewarded: '',
         banner: 'ca-app-pub-6411535997477460/4522955438',
       },
