@@ -1,0 +1,49 @@
+name: Store images
+
+# ストア用の画像と文章（docs/store）を ZIP にまとめ、Release「store-images」に置く。
+# いつも同じ URL でまとめてダウンロードできる:
+#   https://github.com/techgymjp/plongeonshoot/releases/download/store-images/musasabi-store.zip
+on:
+  push:
+    paths:
+      - 'docs/store/**'
+      - '.github/workflows/store.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: store-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zip:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make the zip
+        run: |
+          mkdir -p musasabi-store/googleplay musasabi-store/appstore
+          cp docs/store/*.png docs/store/*.md docs/store/*.txt musasabi-store/googleplay/
+          cp -r docs/store/ios/. musasabi-store/appstore/
+          zip -r -0 musasabi-store.zip musasabi-store
+          unzip -l musasabi-store.zip
+
+      - name: Upload to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          ムササビシュートのストア用の画像と文章（Google Play・App Store）。docs/store の内容を ZIP にまとめたもの（${GITHUB_SHA::7}）。
+
+          - googleplay/: アイコン、フィーチャーグラフィック、スクリーンショット 1920×1080（日英 各5枚）、掲載文、リリースノート
+          - appstore/: スクリーンショット 2622×1206（6.3inch/ に日英 各4枚）、ヘッダ、検索結果、紹介文
+          NOTES
+          if gh release view store-images > /dev/null 2>&1; then
+            gh release upload store-images musasabi-store.zip --clobber
+            gh release edit store-images --title "ストア用の画像と文章" --notes-file notes.md --latest=false
+          else
+            gh release create store-images musasabi-store.zip --target "$GITHUB_SHA" --title "ストア用の画像と文章" --notes-file notes.md --latest=false
+          fi
