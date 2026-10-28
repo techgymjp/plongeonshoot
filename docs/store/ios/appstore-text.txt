@@ -1,0 +1,136 @@
+App Store に貼る文章（ムササビシュート）
+
+App Store Connect の「配信」タブ → iOS App 1.0.0 で、日本語と英語（English (U.S.)）の欄に貼ります。
+画像は docs/store/ios/ にあります（スクリーンショット 6.3inch/ の ja-・en- 各 4 枚、ヘッダ、検索結果）。
+
+==================== 日本語 ====================
+
+[名前]（30 文字以内。App 情報）
+ムササビシュート ハンドボール
+
+[サブタイトル]（30 文字以内。App 情報）
+跳んで倒れ込んで決めるハンドボール
+
+[プロモーション用テキスト]（170 文字以内）
+ホイッスルでパスを受けて、3歩以内にサイドから跳び込め！空中で倒れ込むムササビシュートで、7タイプのキーパーを打ち抜こう。全20本で何点取れるか挑戦。
+
+[キーワード]（100 文字以内）
+ハンドボール,シュート,スポーツ,ジャンプ,キーパー,ゴール,サイド,プロンジョン,球技,3D,無料,ゲーム
+
+[概要]（4000 文字以内）
+満員の室内アリーナ。ホイッスルが鳴り、味方からパスが来る。
+サイドから中へ跳び込み、空中で大きく倒れ込んでシュートを放て！ハンドボールのサイドシュート「ムササビシュート（プロンジョン）」を3Dで再現。全20本で何点取れるかに挑戦しよう。
+
+■ ホイッスルでパスを受ける
+・右コーナー、サイドの定位置、サイドライン沿いの走り込みなど、毎回ちがう位置から始まる
+・パスも直接パス、バウンドパス、山なりパスといろいろ
+・選手は右利きの左サイド。画面の右側から攻める
+
+■ 3歩以内に跳び込む
+・歩数はボールを取ってから数える。4歩目はオーバーステップで反則
+・6mラインを踏んだら反則。シュートの前に着地しても失敗
+・「ダッシュ」を押している間は歩幅が大きくなり、スピードが上がる
+・ボールを取ってからダッシュで2歩進むと「ムササビ」が使えるようになる
+
+■ ムササビシュート
+・ゴールではなくコートの中央へ向かって跳び、空中で倒れ込んでシュートの角度を広げる
+・先に高く上がってキーパーの動きを見て、遅れて倒れ込むのが本物の動き
+・着地は前に転がって受け身
+
+■ 円形カーソルとボタンで、いろいろなシュート
+・跳んだら左側の円形カーソルでコースを決める（高く／低く／左右）
+・右側のボタン：中央ノーマル、上ループ、左右スピン、下バウンド
+・投げる前には腕を振りかぶるので、少し時間がかかる
+・地面ではステップシュート。跳んですぐならクイック、空中・倒れ込みながらのシュートも
+・スピンはダッシュのスピードと使った歩数で大きく曲がる
+
+■ キーパーは7タイプ
+・定位置でじっくり型、飛び出し型、ニアを固める型、左右に揺さぶる型、フェイント型、ゴールライン型、大の字ジャンプ型
+・シュートを打つ人に向かって前に出てくる。先に動いたら「右に倒れた！」などと表示される
+・飛び出したらループ、大の字ならバウンド、倒れたら逆へノーマル。動きを見極めて打ち分けよう
+
+■ 室内アリーナの3D
+・満員のスタンド、広告ボード、実際のサイズのゴールとコート
+・ゴールで大歓声と紙吹雪
+
+■ かんたん操作
+・自信がないときは「ナビ」をオンに。跳ぶタイミングや、ねらうコースを教えてくれる
+
+■ その他
+・S〜Dのランクとベスト記録
+・スコアを友だちにシェア（ナビあり／なしも表示）
+・決まらなかった1本は、広告を見てやり直せる（1ゲーム5回まで）
+・オフラインでも遊べる（広告・シェアは通信が必要）
+・日本語・英語対応
+
+さあ、跳べ。20本全部、決められるか？
+
+==================== English ====================
+
+[Name] (max 30 characters)
+Musasabi Shoot: Handball
+
+[Subtitle] (max 30 characters)
+Dive in and beat the keeper
+
+[Promotional Text] (max 170 characters)
+Catch the pass on the whistle and take off from the wing within 3 steps. Lean in the air with the musasabi shot and beat 7 types of keeper. 20 shots per game.
+
+[Keywords] (max 100 characters)
+handball,sports,shoot,jump,goalkeeper,goal,wing,plongeon,flying squirrel,ball,3d,free
+
+[Description] (max 4000 characters)
+A packed indoor arena. The whistle blows and the pass comes in.
+Take off from the wing, dive toward the middle of the court and lean far over in the air to shoot! Musasabi Shoot recreates the handball wing "plongeon" shot (the "flying squirrel" shot) in 3D. 20 shots per game. How many can you score?
+
+■ CATCH THE PASS ON THE WHISTLE
+• Start from the right corner, the wing spot, or a run along the sideline. Every shot is different.
+• Direct passes, bounce passes and lob passes.
+• You are a right-handed left winger, attacking from the right side of the screen.
+
+■ TAKE OFF WITHIN 3 STEPS
+• Steps count from the catch. A 4th step is a foul.
+• Touch the 6 m line and it's a foul. Land before you shoot and the chance is gone.
+• Hold DASH for longer strides and more speed.
+• Two DASH steps after the catch unlock MUSASABI.
+
+■ THE MUSASABI SHOT
+• Dive toward the middle of the court, not the goal, and lean over in the air to widen the angle.
+• Rise first, read the keeper, then lean late, just like the real thing.
+• Land with a forward roll.
+
+■ MANY SHOTS FROM ONE RING AND FIVE BUTTONS
+• In the air, aim with the direction ring on the left: high, low, left or right.
+• Shot buttons on the right: NORMAL in the centre, LOOP on top, L-SPIN and R-SPIN on the sides, BOUNCE at the bottom.
+• You wind up before you throw, so the release takes a moment.
+• Step shots on the ground, quick shots right after take-off, jump shots and falling shots in the air.
+• Spin breaks harder with more dash speed and more steps.
+
+■ 7 TYPES OF KEEPER
+• Patient keeper, Rusher, Near-post guard, Swayer, Feinter, Line keeper and Star jumper.
+• The keeper comes out toward you. When they commit, you see it, like "Dived right!".
+• Rushed out? LOOP. Star jump? BOUNCE. Dived? NORMAL to the other side.
+
+■ A 3D INDOOR ARENA
+• Full stands, ad boards, and a court and goal at real size.
+• Cheers and confetti for every goal.
+
+■ EASY TO START
+• Turn on NAV when you are not sure. It shows when to jump and where to aim.
+
+■ AND MORE
+• Ranks from S to D and your best score.
+• Share your score with friends (shows whether NAV was on).
+• Missed a shot? Watch an ad to take it again (up to 5 times per game).
+• Play offline (ads and sharing need a connection).
+• English and Japanese.
+
+Ready, set, fly. Can you score all 20?
+
+==================== 共通 ====================
+
+サポート URL: https://techgym.jp/
+プライバシーポリシー URL: https://techgym.jp/privacy-policy/
+著作権: 2026 TECH GYM K.K.
+カテゴリ: ゲーム（サブカテゴリ：スポーツ）
+審査メモ: docs/IOS_BUILD.md の 5 章「審査メモ」
