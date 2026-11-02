@@ -1810,6 +1810,8 @@
   }
 
   // タイトル画面の下: バージョン(アプリ版)・プライバシーポリシー・広告の設定(EU など同意が必要な地域だけ)
+  // Web 版だけ、タイトル画面に Google Play のアプリ版へのリンクを出す
+  if (!NATIVE) $('#storeLinks').hidden = false;
   if (window.APP_VERSION && window.APP_VERSION !== 'dev') $('#buildInfo').textContent = window.APP_VERSION;
   if (window.Ads) Ads.initDone.then(() => { if (Ads.privacyOptionsRequired) $('#adPrivacy').hidden = false; });
   $('#adPrivacyLink').addEventListener('click', (e) => { e.preventDefault(); if (window.Ads) Ads.showPrivacyOptions(); });
