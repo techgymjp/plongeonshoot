@@ -24,7 +24,9 @@ window.I18N = (() => {
       'result.newRecord': 'ベスト記録更新！',
       'result.best': 'ベスト {b} 点',
       'nav.on': 'ナビあり', 'nav.off': 'ナビなし', 'nav.redo': '・やり直し{n}回',
+      // web-only:start
       'title.getAndroid': '▶ Android アプリ版を Google Play で入手',
+      // web-only:end
       'legal.privacy': 'プライバシーポリシー', 'legal.privacyUrl': 'https://techgym.jp/privacy-policy/', 'legal.adSettings': '広告の設定',
       'redo.watch': '▶ 広告を見てこの1本をやり直す', 'redo.next': 'つぎへ（{s}）', 'redo.loading': '広告を読み込み中…',
       'redo.note': '決まらなかった1本を、同じ形でもう一度（このゲームであと{n}回 / {max}回まで）',
@@ -128,7 +130,9 @@ window.I18N = (() => {
       'result.newRecord': 'New best!',
       'result.best': 'Best {b} pts',
       'nav.on': 'NAV on', 'nav.off': 'NAV off', 'nav.redo': ', {n} redo(s)',
+      // web-only:start
       'title.getAndroid': '▶ Get the Android app on Google Play',
+      // web-only:end
       'legal.privacy': 'Privacy Policy', 'legal.privacyUrl': 'https://techgym.jp/privacy-policy-en/', 'legal.adSettings': 'Ad settings',
       'redo.watch': '▶ Watch an ad to retake this shot', 'redo.next': 'Next ({s})', 'redo.loading': 'Loading the ad…',
       'redo.note': 'Retake the shot you missed, exactly the same ({n} of {max} left this game)',

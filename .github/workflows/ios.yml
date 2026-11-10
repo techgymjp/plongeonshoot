@@ -72,7 +72,7 @@ jobs:
       - name: Copy web assets into the iOS project (test ads)
         if: steps.mode.outputs.upload != 'true'
         run: |
-          npm run build
+          npm run build:app
           npx cap sync ios
 
       # bash は pipefail で動くので、xcodebuild が失敗すればこのステップも失敗する
@@ -87,7 +87,7 @@ jobs:
       - name: Copy web assets into the iOS project (production ads)
         if: steps.mode.outputs.upload == 'true'
         run: |
-          ADMOB_MODE=production npm run build
+          ADMOB_MODE=production npm run build:app
           npx cap sync ios
 
       # 配布用の証明書を一時的なキーチェーンに入れ、API キーをファイルに書き出す

@@ -165,7 +165,7 @@ GitHub Pages などの静的ホスティングにそのまま置けます。
 構成は techgymjp/jet-fighter の `docs/ANDROID_PORTING.md`、techgymjp/corner-kick と同じです。
 
 - パッケージ名: `jp.techgym.plongeonshoot`
-- Google Play: https://play.google.com/store/apps/details?id=jp.techgym.plongeonshoot （Web 版のタイトル画面にもリンクを出している。アプリ版では出さない）
+- Google Play: https://play.google.com/store/apps/details?id=jp.techgym.plongeonshoot （Web 版のタイトル画面にもリンクを出している。アプリ用のビルド `npm run build:app` では、`web-only` の目印で囲んだこの部分をファイルごと取り除く）
 - アプリ名: ムササビシュート（英語の端末では Musasabi Shoot）
 - 横画面固定・全画面・プレイ中は画面を消さない
 - 戻るボタン: プレイ中は一時停止（ポーズ中なら再開）、遊び方の画面ではタイトルへ、タイトル・結果画面ではアプリを終了
@@ -182,7 +182,7 @@ GitHub Pages などの静的ホスティングにそのまま置けます。
 
 ビルドは GitHub Actions（`.github/workflows/android.yml`）で行います。
 
-1. `npm ci` → `npm run build`（`www/` に Web ファイルをコピーし、`ads-config.js` と `build-info.js` を生成）→ `npx cap sync android` → `./gradlew assembleDebug`
+1. `npm ci` → `npm run build:app`（`www/` に Web ファイルをコピーして Web 版だけの部分を取り除き、`ads-config.js` と `build-info.js` を生成）→ `npx cap sync android` → `./gradlew assembleDebug`
 2. 既定ブランチなら、Release `android-latest` の `plongeonshoot.apk` を差し替え（動作確認用・テスト広告）
    - リリース画面: https://github.com/techgymjp/plongeonshoot/releases/tag/android-latest （QR コード: `docs/apk-qr.png`）
    - APK 直接: https://github.com/techgymjp/plongeonshoot/releases/latest/download/plongeonshoot.apk

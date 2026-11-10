@@ -173,12 +173,14 @@ html, body {
 }
 
 /* ---------- タイトルの下: バージョン・プライバシーポリシー・広告の設定 ---------- */
+/* web-only:start */
 #storeLinks { margin: 10px 0 0; }
 #storeLinks[hidden] { display: none; }
 #storeLinks a { display: inline-block; font-size: 14px; padding: 6px 16px; border-radius: 16px; color: #fff; text-decoration: none;
   background: rgba(30, 110, 55, .55); border: 1px solid rgba(120, 220, 150, .6); }
 #storeLinks a:hover { background: rgba(40, 140, 70, .7); }
 @media (max-height: 460px) { #storeLinks { margin-top: 6px; } #storeLinks a { font-size: 12px; padding: 4px 12px; } }
+/* web-only:end */
 #legal { margin-top: 10px; font-size: 12px; color: #b0bec5; }
 #legal a { color: #cfe8ff; }
 #legal [hidden] { display: none; }
