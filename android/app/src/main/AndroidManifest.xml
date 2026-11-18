@@ -33,6 +33,11 @@
         </provider>
     </application>
 
+    <!-- 横画面に固定しているが（sensorLandscape）、画面の向きは端末の必須条件にしない
+         （screenOrientation から暗黙に必須になり、対応端末が減るのを防ぐ） -->
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
