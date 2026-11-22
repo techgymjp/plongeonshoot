@@ -158,6 +158,24 @@ Musasabi Shoot is a free 3D handball game for all ages. The player catches a pas
 - A screen recording on an iPhone, from launch through gameplay, is attached (or: <link>).
 ```
 
+### Guideline 4.3（スパム）向けのメモ
+
+同じ開発者が、同じ技術（three.js・Capacitor・似た画面の作り）でスポーツゲームを何本も出しているので、「似たアプリの量産（4.3 Spam）」とみなされないよう、先に説明しておくための文です。上の審査メモの後ろに足すか、4.3 で連絡が来たら App Review への返信に使います（英語のまま貼る）。
+
+```
+About Guideline 4.3 (Spam):
+Musasabi Shoot is a standalone game with its own concept and gameplay. It is not a re-skin or a copy of another app.
+
+- One sport, one technique: the game is built around a single real handball move, the wing "plongeon" (diving) shot, known in Japan as the "musasabi" (flying squirrel) shot. We studied how real wing players take off, rise, lean late and land with a roll, and recreated it.
+- Unique rules and controls: the player catches a pass on the whistle (direct, bounce or lob pass from three different start positions), must take off within three steps after the catch, and must not touch the 6 m line. Two dash steps unlock the musasabi jump. In the air the player aims with a direction ring and chooses one of five throws (normal, loop, left spin, right spin, bounce); spin strength depends on run-up speed and steps used.
+- Its own opponent: seven goalkeeper types with different movements (rushing out, star jump, feints, and others) that the player must read before shooting.
+- Its own content: the indoor arena, players, goalkeeper animations, sounds, texts and store images were all made for this game. Nothing is shared with our other apps except general-purpose libraries (three.js, Capacitor, Google Mobile Ads).
+- Our other games on the App Store (for example JET STRIKE, a jet fighter game) are different genres with different rules and controls. We do not publish multiple versions of the same game, and this app does not duplicate any of them.
+- One app, one bundle ID, available in Japanese and English. No templates, app generators or white-label services were used.
+```
+
+（日本語の要約）ハンドボールの「ムササビシュート」という1つの技だけを題材に、実際の動きを調べて再現した独自のゲームで、別アプリの作り直しではないこと。パスの種類と開始位置、3歩・6m ラインのルール、ダッシュ2歩でムササビ、方向リングと5種類のシュート、7タイプのキーパーなど、ルールと操作が独自であること。画像・音・文章はこのゲーム用に作り、ほかのアプリと共通なのは汎用のライブラリだけであること。同じ開発者のほかのゲームは別ジャンルで、同じゲームを複数出してはいないこと。
+
 ---
 
 ## 6. 公開後にやること
