@@ -25,7 +25,7 @@ window.Ads = (() => {
       },
       // 本番の広告ユニット(AdMob の「ムササビシュート」iOS)
       production: {
-        interstitial: 'ca-app-pub-6411535997477460/3962176093',
+        interstitial: 'ca-app-pub-6411535997477460/8080966615',
         rewarded: 'ca-app-pub-6411535997477460/2649094424',
         banner: 'ca-app-pub-6411535997477460/9394048287',
       },
