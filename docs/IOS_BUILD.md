@@ -160,25 +160,17 @@ Musasabi Shoot is a free 3D handball game for all ages. The player catches a pas
 
 ### 5.6 でリジェクトされたときの返信（App Review への返信。英語のまま貼る）
 
-`<BUILD>` は差し替えたビルド番号、`<iOS>` は録画した iPhone の iOS のバージョンに置き換えます。録画は 4 章のとおり、アプリの起動から撮ったものを添付します（大きいときは 720p にするか、共有リンクを貼る）。
+`<BUILD>` は差し替えたビルド番号に置き換えます。
 
 ```
 Thank you for the review. We have resolved the issue in build <BUILD>.
 
-What happened: Musasabi Shoot is built from the same source files as our free web version. The previous build accidentally included code that is only meant for the web version:
-- a link to our Android app on Google Play, and the code that kept it hidden inside the app,
-- test hooks we use to take store screenshots automatically on a computer,
-- a "please rotate your phone" notice for web browsers.
-None of these could be used in the app, but we understand they looked like features hidden during review. We have removed all of them from the app bundle. Our build now strips web-only code and stops if any of it remains.
+Musasabi Shoot is built from the same source files as our web version. The previous build accidentally included code meant only for the web version: a link to our Android app on Google Play and the code that kept it hidden in the app, test hooks for taking screenshots, and a "rotate your phone" notice for web browsers. None of these could be used in the app, but we understand they looked like hidden features. We have removed all of them from the app bundle.
 
-The app has no hidden, remote-controlled or review-dependent features. Everything is available to every user right after launch: the title screen, How to Play, the game itself (20 shots), pause, the result screen with sharing, and an optional rewarded ad to retake a missed shot. Nothing changes by device, date, region or review status. The only conditional screens are standard ones: Google's consent message where required by law, and the App Tracking Transparency prompt.
-
-The app is designed for iPhone in landscape. On iPad it runs in iPhone compatibility mode with the same features.
-
-A screen recording on an iPhone (iOS <iOS>), from launch through gameplay, is attached.
+The app has no hidden or review-dependent features. All features are available to every user right after launch, and nothing changes by device, date, region or review status. The only conditional screens are Google's consent message where required by law and the App Tracking Transparency prompt.
 ```
 
-（日本語の要約）前のビルドには、Web 版用の部分（Google Play へのリンクとアプリで隠す処理、撮影用のテストの入口、ブラウザ向けの「横向きにして」の案内）がまちがって入っていた。アプリでは使えなかったが、隠した機能に見えたことは理解しているので、すべて取り除いた。今はビルドの時点で取り除き、残っていたら止まる。アプリには隠した機能・遠隔で切り替える機能・審査中だけ変わる機能はなく、端末・日付・地域で変わることもない。条件で出るのは、法律で必要な同意画面と ATT の確認だけ。iPhone 向けの横画面アプリで、iPad では互換モードで同じように動く。起動からの実機の録画を添付する。
+（日本語の要約）前のビルドには、Web 版用の部分（Google Play へのリンクとアプリで隠す処理、撮影用のテストの入口、ブラウザ向けの「横向きにして」の案内）がまちがって入っていた。アプリでは使えなかったが、隠した機能に見えたことは理解しているので、すべて取り除いた。隠した機能・審査中だけ変わる機能はなく、すべての機能を起動直後から誰でも使え、端末・日付・地域・審査中かどうかで変わることはない。条件で出るのは、法律で必要な同意画面と ATT の確認だけ。
 
 ### Guideline 4.3（スパム）向けのメモ
 
