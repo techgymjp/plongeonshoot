@@ -155,7 +155,7 @@ Musasabi Shoot is a free 3D handball game for all ages. The player catches a pas
 - Other services: the system share sheet for sharing the score. No other external services, no in-app purchases, no user-generated content.
 - The app works the same in all regions. It is in Japanese and English.
 - No regulated industry. All graphics and sounds were made for this game; the 3D library three.js is used under the MIT License.
-- A screen recording on an iPhone, from launch through gameplay, is attached (or: <link>).
+- Build 115 and later: code meant only for our web version (a Google Play link, screenshot test hooks and a browser-only notice) has been removed from the app bundle. The app has no hidden or review-dependent features.
 ```
 
 ### 5.6 でリジェクトされたときの返信（App Review への返信。英語のまま貼る）
