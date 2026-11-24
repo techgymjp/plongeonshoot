@@ -1938,7 +1938,7 @@
     const frameDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
     last = now;
     acc += frameDt;
-    if (api.hold) acc = 0;
+    if (window.MS && window.MS.hold) acc = 0;
     while (acc >= DT) { update(DT); acc -= DT; }
     updateHud();
     updateBanner();
@@ -1947,9 +1947,10 @@
   }
   requestAnimationFrame(frame);
 
-  // テスト・デバッグ用
-  const api = window.MS = {
+  // web-only:start  テスト・撮影用(自動操作など)。アプリ用のビルドでは取り除く
+  window.MS = {
     hold: false, game, input, update, setMusaSteps(n) { MUSA_STEPS = n; }, doJump, doShoot, pressJump, pressCenter: pressJump, startGame, DT,
     get player() { return player; }, get keeper() { return keeper; }, get ball() { return ball; },
   };
+  // web-only:end
 })();

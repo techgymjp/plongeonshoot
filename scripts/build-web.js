@@ -1,5 +1,5 @@
 // Web ファイルを www/ にコピーする。Web 版（Vercel）は npm run build、アプリ（Android / iOS）は npm run build:app。
-// アプリ用（APP_BUILD=1）では、Web 版だけの部分（Google Play へのリンクなど）を取り除く:
+// アプリ用（APP_BUILD=1）では、Web 版だけの部分（Google Play へのリンク、テスト用の window.MS、縦向きの案内など）を取り除く:
 //   HTML は <!-- web-only --> … <!-- /web-only -->、JS は // web-only:start … // web-only:end の行、CSS は /* web-only:start */ … /* web-only:end */
 // アプリのバンドルに他社ストアへのリンクと、それをアプリで隠す処理が入っていると、
 // App Store の審査で「審査中に隠した機能」（Guideline 5.6）とみなされることがあるため
@@ -31,7 +31,7 @@ if (app) {
     if (!re || !fs.statSync(file).isFile()) continue;
     const text = fs.readFileSync(file, 'utf8').replace(re, '');
     fs.writeFileSync(file, text);
-    if (/play\.google\.com|apps\.apple\.com|web-only/.test(text)) bad.push(item);
+    if (/play\.google\.com|apps\.apple\.com|web-only|window\.MS =|id="rotate"/.test(text)) bad.push(item);
   }
   if (bad.length) {
     console.error(`Web 版だけの部分がアプリ用のファイルに残っています: ${bad.join(', ')}`);

@@ -14,8 +14,10 @@ window.I18N = (() => {
       'btn.title': 'タイトルへ',
       'btn.resume': '再開',
       'best.title': 'ベスト記録：{b} 点',
+      // web-only:start
       'rotate.msg': 'スマホを横向きにしてください',
       'rotate.sub': 'ムササビシュートは横画面で遊ぶゲームです',
+      // web-only:end
       'hud.shot': '{n} / {t} 本目',
       'hud.steps': '歩数',
       'hud.nav': 'ナビ {s}',
@@ -120,8 +122,10 @@ window.I18N = (() => {
       'btn.title': 'TITLE',
       'btn.resume': 'RESUME',
       'best.title': 'Best: {b} pts',
+      // web-only:start
       'rotate.msg': 'Please turn your phone sideways',
       'rotate.sub': 'Musasabi Shoot is played in landscape',
+      // web-only:end
       'hud.shot': 'SHOT {n} / {t}',
       'hud.steps': 'STEPS',
       'hud.nav': 'NAV {s}',

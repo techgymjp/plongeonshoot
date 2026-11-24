@@ -158,6 +158,28 @@ Musasabi Shoot is a free 3D handball game for all ages. The player catches a pas
 - A screen recording on an iPhone, from launch through gameplay, is attached (or: <link>).
 ```
 
+### 5.6 でリジェクトされたときの返信（App Review への返信。英語のまま貼る）
+
+`<BUILD>` は差し替えたビルド番号、`<iOS>` は録画した iPhone の iOS のバージョンに置き換えます。録画は 4 章のとおり、アプリの起動から撮ったものを添付します（大きいときは 720p にするか、共有リンクを貼る）。
+
+```
+Thank you for the review. We have resolved the issue in build <BUILD>.
+
+What happened: Musasabi Shoot is built from the same source files as our free web version. The previous build accidentally included code that is only meant for the web version:
+- a link to our Android app on Google Play, and the code that kept it hidden inside the app,
+- test hooks we use to take store screenshots automatically on a computer,
+- a "please rotate your phone" notice for web browsers.
+None of these could be used in the app, but we understand they looked like features hidden during review. We have removed all of them from the app bundle. Our build now strips web-only code and stops if any of it remains.
+
+The app has no hidden, remote-controlled or review-dependent features. Everything is available to every user right after launch: the title screen, How to Play, the game itself (20 shots), pause, the result screen with sharing, and an optional rewarded ad to retake a missed shot. Nothing changes by device, date, region or review status. The only conditional screens are standard ones: Google's consent message where required by law, and the App Tracking Transparency prompt.
+
+The app is designed for iPhone in landscape. On iPad it runs in iPhone compatibility mode with the same features.
+
+A screen recording on an iPhone (iOS <iOS>), from launch through gameplay, is attached.
+```
+
+（日本語の要約）前のビルドには、Web 版用の部分（Google Play へのリンクとアプリで隠す処理、撮影用のテストの入口、ブラウザ向けの「横向きにして」の案内）がまちがって入っていた。アプリでは使えなかったが、隠した機能に見えたことは理解しているので、すべて取り除いた。今はビルドの時点で取り除き、残っていたら止まる。アプリには隠した機能・遠隔で切り替える機能・審査中だけ変わる機能はなく、端末・日付・地域で変わることもない。条件で出るのは、法律で必要な同意画面と ATT の確認だけ。iPhone 向けの横画面アプリで、iPad では互換モードで同じように動く。起動からの実機の録画を添付する。
+
 ### Guideline 4.3（スパム）向けのメモ
 
 同じ開発者が、同じ技術（three.js・Capacitor・似た画面の作り）でスポーツゲームを何本も出しているので、「似たアプリの量産（4.3 Spam）」とみなされないよう、先に説明しておくための文です。上の審査メモの後ろに足すか、4.3 で連絡が来たら App Review への返信に使います（英語のまま貼る）。
@@ -215,8 +237,8 @@ Secrets がないとき・ほかのブランチでは、署名なしでシミュ
 
 ## Web 版だけの部分（Guideline 5.6 対策）
 
-Web 版とアプリは同じファイルから作っています。Google Play へのリンクのような Web 版だけの部分は、`index.html` では `<!-- web-only -->` … `<!-- /web-only -->`、JS では `// web-only:start` … `// web-only:end`、CSS では `/* web-only:start */` … `/* web-only:end */` で囲んであります。
-アプリ用のビルド（`npm run build:app`。`ios:sync`・`ios:release`・`android:sync`・GitHub Actions はこちらを使う）では、この範囲を取り除いてから `www/` にコピーし、`play.google.com` などが残っていたらビルドを止めます。
+Web 版とアプリは同じファイルから作っています。Web 版だけの部分（Google Play へのリンク、テスト・撮影用の `window.MS`、縦向きのときの「横向きにして」の案内）は、`index.html` では `<!-- web-only -->` … `<!-- /web-only -->`、JS では `// web-only:start` … `// web-only:end`、CSS では `/* web-only:start */` … `/* web-only:end */` で囲んであります。
+アプリ用のビルド（`npm run build:app`。`ios:sync`・`ios:release`・`android:sync`・GitHub Actions はこちらを使う）では、この範囲を取り除いてから `www/` にコピーし、`play.google.com`・`window.MS =`・`id="rotate"` などが残っていたらビルドを止めます。
 
 他社ストアへのリンクや、端末によって隠す処理がアプリのバンドルに入っていると、App Store の審査で「Guideline 5.6 - Developer Code of Conduct（審査中に隠した機能）」とみなされることがあるためです（ほかのゲームで実際にリジェクトされた）。
 Web 版だけの機能を足すときは、必ず目印で囲んでください。端末・日付・地域などで出し分ける機能は、アプリには入れません（入れる場合は審査メモで説明する）。

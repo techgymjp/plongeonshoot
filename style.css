@@ -15,7 +15,8 @@ html, body {
 #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #view { background: #10121a; }
 
-/* スマホを縦に持っているときの案内 */
+/* スマホを縦に持っているときの案内（アプリは OS で横画面に固定するので、アプリ用のビルドでは取り除く） */
+/* web-only:start */
 #rotate {
   display: none; position: fixed; inset: 0; z-index: 10; background: #0d1220; color: #fff;
   text-align: center; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 0 16px;
@@ -25,6 +26,7 @@ html, body {
 #rotate small { color: #b0bec5; font-size: 14px; }
 @keyframes turn { 0%, 20% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
 @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+/* web-only:end */
 
 /* ---------- HUD ---------- */
 #hud {
